@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vice City: Bug Hunt 3D</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <link rel="stylesheet" href="/styles/hud.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/three.module.js",
+        "three/addons/": "/vendor/three-addons/",
+        "@dimforge/rapier3d-compat": "/vendor/rapier/rapier.mjs",
+        "socket.io-client": "/vendor/socket.io/socket.io.esm.min.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Lobby -->
+  <div id="lobby" class="overlay">
+    <div class="lobby-card">
+      <h1 class="logo"><span class="logo-vice">VICE CITY</span><span class="logo-bug">BUG HUNT 3D</span></h1>
+      <p class="tagline">Explore. Fight. Fix real JavaScript to unlock the city.</p>
+      <label class="field">
+        <span>Player name</span>
+        <input id="lobby-name" maxlength="16" autocomplete="off" placeholder="3-16 letters or numbers" />
+      </label>
+      <div class="lobby-actions">
+        <button id="btn-freeroam" class="btn btn-primary">Play Free Roam</button>
+        <button id="btn-arena" class="btn btn-secondary">Play Bug Hunt Arena</button>
+      </div>
+      <details class="lobby-more">
+        <summary>Private rooms</summary>
+        <div class="row">
+          <select id="create-mode">
+            <option value="freeroam">Free Roam</option>
+            <option value="arena">Bug Hunt Arena</option>
+          </select>
+          <label class="check"><input type="checkbox" id="create-pvp" checked /> PvP combat</label>
+          <button id="btn-create" class="btn">Create room</button>
+        </div>
+        <div class="row">
+          <input id="join-code" maxlength="5" placeholder="Room code" autocomplete="off" />
+          <button id="btn-join" class="btn">Join</button>
+        </div>
+      </details>
+      <p id="lobby-error" class="error" role="alert"></p>
+      <p class="controls-help">WASD move · Mouse look · Click shoot · Right-click aim · Shift sprint · Space jump · E interact / car · F station demo · R reload · 1-4 weapons · Tab scores · Esc menu</p>
+    </div>
+  </div>
+
+  <div id="app" hidden>
+    <header id="topbar">
+      <div class="brand">VICE CITY: <b>BUG HUNT</b></div>
+      <div class="top-stat">PLAYER <b id="top-name">-</b></div>
+      <div class="top-stat">ROOM <b id="top-room">-</b></div>
+      <div class="top-stat">SCORE <b id="top-score">0</b></div>
+      <div class="top-stat">RANK <b id="top-rank">-</b></div>
+      <div class="top-spacer"></div>
+      <button id="btn-toggle-debug" class="btn btn-small" title="Show or hide the debugging workspace">Debugger ◧</button>
+      <button id="btn-menu" class="btn btn-small" title="Settings (Esc)">⚙</button>
+    </header>
+
+    <main id="split">
+      <section id="game-panel" aria-label="3D game">
+        <div id="canvas-host"></div>
+        <div id="hud">
+          <div id="crosshair"><span></span></div>
+          <div id="hitmarker"></div>
+          <div id="damage-vignette"></div>
+          <div id="damage-arrow"></div>
+          <div id="killfeed"></div>
+          <div id="toasts"></div>
+          <div id="popups"></div>
+          <div id="mission-tracker"></div>
+          <div id="prompt"></div>
+          <div id="shield-badge" hidden>SAFE DEBUGGING SHIELD</div>
+          <div id="drill" hidden></div>
+          <canvas id="minimap" width="180" height="180"></canvas>
+          <div id="vitals">
+            <div class="bar"><div id="health-fill"></div><span id="health-text">100</span></div>
+            <div id="weapon-box">
+              <div id="weapon-name">PISTOL</div>
+              <div id="ammo-text">12 / 60</div>
+              <div id="weapon-slots"></div>
+            </div>
+          </div>
+          <div id="death-overlay" hidden>
+            <div class="death-title">FLATLINED</div>
+            <div id="death-detail"></div>
+          </div>
+          <div id="click-to-play">Click the game to look around · your code is safe while you play</div>
+          <div id="fps" hidden></div>
+          <div id="net-status" hidden>Reconnecting…</div>
+        </div>
+      </section>
+
+      <div id="divider" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize"></div>
+
+      <section id="debug-panel" aria-label="JavaScript debugger">
+        <div id="bug-board">
+          <h2>JAVASCRIPT DEBUGGER</h2>
+          <p class="muted">Walk up to a glowing debugging station and press <kbd>E</kbd>. Each station is wired to a real seeded bug in the city.</p>
+          <ul id="bug-list"></ul>
+        </div>
+        <div id="challenge" hidden>
+          <div class="challenge-head">
+            <div>
+              <div id="ch-title">Challenge</div>
+              <div id="ch-meta"></div>
+            </div>
+            <button id="btn-close-challenge" class="btn btn-small" title="Leave this challenge (your draft is saved)">Exit ✕</button>
+          </div>
+          <details id="ch-details" open>
+            <summary>Broken behaviour</summary>
+            <p id="ch-desc"></p>
+            <ol id="ch-repro"></ol>
+            <p id="ch-consequence" class="muted"></p>
+          </details>
+          <div id="editor-host"></div>
+          <div class="challenge-actions">
+            <button id="btn-run" class="btn btn-primary">Run Tests</button>
+            <button id="btn-apply" class="btn btn-success" disabled title="Enabled after every test passes">Apply Fix</button>
+            <button id="btn-reset" class="btn">Reset Code</button>
+            <button id="btn-hint" class="btn">Hint</button>
+            <span id="ch-status"></span>
+          </div>
+          <div id="ch-hints"></div>
+          <div id="ch-output" aria-live="polite"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer id="bottombar">
+      <div id="bottom-mission">MISSION: -</div>
+      <div class="bottom-stats">
+        <span>BUGS FIXED <b id="b-bugs">0/12</b></span>
+        <span>KILLS <b id="b-kills">0</b></span>
+        <span>DEATHS <b id="b-deaths">0</b></span>
+        <span>DISTRICT <b id="b-district">-</b></span>
+        <span id="b-round" hidden>ROUND <b id="b-round-time">-</b></span>
+      </div>
+    </footer>
+  </div>
+
+  <div id="leaderboard" class="overlay" hidden>
+    <div class="panel wide">
+      <div class="panel-head"><h2>LEADERBOARD</h2><span class="muted">Hold or toggle with Tab</span></div>
+      <div class="tabs" id="lb-tabs">
+        <button data-board="session" class="active">This room</button>
+        <button data-board="overall">Overall</button>
+        <button data-board="bugs">Most bugs fixed</button>
+        <button data-board="combat">Combat score</button>
+        <button data-board="kd">Best K/D</button>
+        <button data-board="fastest">Fastest fix</button>
+      </div>
+      <div id="lb-body"></div>
+      <div id="lb-profile"></div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>PAUSED</h2></div>
+      <label class="field"><span>Mouse sensitivity <b id="sens-val"></b></span><input type="range" id="set-sens" min="0.2" max="3" step="0.1" /></label>
+      <label class="check"><input type="checkbox" id="set-invert" /> Invert vertical look</label>
+      <label class="field"><span>Volume <b id="vol-val"></b></span><input type="range" id="set-vol" min="0" max="1" step="0.05" /></label>
+      <label class="check"><input type="checkbox" id="set-mute" /> Mute</label>
+      <label class="field"><span>Graphics</span>
+        <select id="set-gfx"><option value="high">High (shadows)</option><option value="low">Low (lab computers)</option></select>
+      </label>
+      <label class="field"><span>Lighting</span>
+        <select id="set-light"><option value="sunset">Sunset</option><option value="night">Night</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="set-fps" /> Show FPS counter (dev)</label>
+      <div class="menu-actions">
+        <button id="btn-resume" class="btn btn-primary">Resume</button>
+        <button id="btn-leave" class="btn">Leave room</button>
+      </div>
+      <p class="muted small">Room code: <b id="menu-room"></b> · Mode: <b id="menu-mode"></b> · PvP: <b id="menu-pvp"></b></p>
+    </div>
+  </div>
+
+  <div id="fatal" class="overlay" hidden><div class="panel"><h2>Something went wrong</h2><p id="fatal-text"></p><button class="btn" onclick="location.reload()">Reload</button></div></div>
+
+  <script src="/vendor/monaco/vs/loader.js"></script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

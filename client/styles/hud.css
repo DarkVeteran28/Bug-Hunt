@@ -1,0 +1,89 @@
+#hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--font); user-select: none; }
+#hud > * { position: absolute; }
+
+#crosshair { left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 3px #000; }
+#crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+#crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+#crosshair span { position: absolute; left: 9px; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: var(--pink); }
+#crosshair.aiming { transform: translate(-50%, -50%) scale(0.7); }
+#crosshair.hidden { display: none; }
+#hitmarker { left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%) rotate(45deg); opacity: 0; transition: opacity 0.15s; }
+#hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #fff; }
+#hitmarker::before { left: 14px; top: 0; width: 2px; height: 30px; }
+#hitmarker::after { top: 14px; left: 0; height: 2px; width: 30px; }
+#hitmarker.show { opacity: 1; transition: none; }
+#hitmarker.kill::before, #hitmarker.kill::after { background: var(--red); }
+
+#damage-vignette { inset: 0; box-shadow: inset 0 0 120px rgba(255, 0, 40, 0.85); opacity: 0; transition: opacity 0.4s; }
+#damage-vignette.show { opacity: 1; transition: none; }
+#damage-arrow { left: 50%; top: 50%; width: 0; height: 0; opacity: 0; transition: opacity 0.8s; }
+#damage-arrow::after { content: ''; position: absolute; left: -14px; top: -130px; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 24px solid rgba(255, 50, 70, 0.9); }
+#damage-arrow.show { opacity: 1; transition: none; }
+
+#killfeed { top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: 13px; }
+.kf { background: rgba(10, 4, 20, 0.7); border: 1px solid var(--line); padding: 3px 8px; border-radius: 6px; animation: fadein 0.2s; }
+.kf b { color: var(--pink); }
+.kf i { color: var(--cyan); font-style: normal; }
+.kf.me { border-color: var(--yellow); }
+
+#toasts { top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; width: min(560px, 90%); }
+.toast { background: rgba(14, 6, 26, 0.85); border: 1px solid var(--line); border-left: 3px solid var(--cyan); padding: 7px 12px; border-radius: 8px; font-size: 14px; animation: fadein 0.2s; text-align: center; }
+.toast.warn { border-left-color: var(--orange); }
+.toast.bad { border-left-color: var(--red); }
+.toast.good { border-left-color: var(--green); }
+.toast.npc { border-left-color: var(--yellow); font-style: italic; }
+
+#popups { left: 50%; top: 30%; transform: translateX(-50%); text-align: center; }
+.popup { font-weight: bold; font-size: 22px; letter-spacing: 2px; text-shadow: 0 0 12px currentColor, 0 2px 0 #000; animation: popup 2.6s ease-out forwards; white-space: nowrap; }
+.popup.bug { color: var(--green); }
+.popup.combat { color: var(--pink); }
+.popup.mission { color: var(--yellow); }
+.popup .sub { display: block; font-size: 14px; color: #fff; letter-spacing: 1px; }
+@keyframes popup { 0% { opacity: 0; transform: translateY(20px) scale(0.8); } 10% { opacity: 1; transform: translateY(0) scale(1.08); } 20% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-40px); } }
+@keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+#mission-tracker { top: 10px; left: 10px; max-width: 280px; background: rgba(10, 4, 20, 0.65); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+#mission-tracker .mt-title { color: var(--yellow); font-weight: bold; letter-spacing: 1px; }
+#mission-tracker .mt-step { color: var(--text); margin-top: 3px; }
+#mission-tracker .mt-dist { color: var(--muted); font-size: 12px; }
+
+#prompt { left: 50%; bottom: 22%; transform: translateX(-50%); background: rgba(10, 4, 20, 0.8); border: 1px solid var(--cyan); color: var(--text); padding: 8px 14px; border-radius: 8px; font-size: 14px; display: none; white-space: nowrap; }
+#prompt.show { display: block; }
+#prompt kbd { color: var(--cyan); }
+
+#shield-badge { left: 50%; top: 56px; transform: translateX(-50%); color: var(--cyan); border: 1px solid var(--cyan); background: rgba(10, 30, 40, 0.75); padding: 3px 10px; border-radius: 12px; font-size: 12px; letter-spacing: 2px; }
+#drill { left: 50%; bottom: 32%; transform: translateX(-50%); background: rgba(10, 4, 20, 0.85); border: 1px solid var(--yellow); padding: 8px 14px; border-radius: 8px; font-size: 13px; min-width: 260px; text-align: center; }
+#drill .drill-bar { height: 8px; background: #2a1846; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+#drill .drill-fill { height: 100%; background: var(--yellow); width: 0; }
+
+#minimap { right: 10px; bottom: 10px; width: 180px; height: 180px; border-radius: 50%; border: 2px solid var(--pink); box-shadow: 0 0 14px rgba(255, 79, 163, 0.5); background: #10061c; }
+
+#vitals { left: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; width: 230px; }
+#vitals .bar { position: relative; height: 18px; background: rgba(10, 4, 20, 0.75); border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+#health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff4f5e, #ff4fa3); transition: width 0.2s; }
+#health-text { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 18px; font-weight: bold; text-shadow: 0 1px 2px #000; }
+#weapon-box { background: rgba(10, 4, 20, 0.75); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+#weapon-name { font-size: 12px; color: var(--muted); letter-spacing: 2px; }
+#ammo-text { font-size: 22px; font-weight: bold; color: var(--text); }
+#ammo-text.low { color: var(--red); }
+#ammo-text.reloading { color: var(--yellow); font-size: 16px; }
+#weapon-slots { display: flex; gap: 4px; margin-top: 4px; }
+.slot { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.slot.owned { color: var(--text); }
+.slot.active { border-color: var(--pink); color: var(--pink); }
+.slot.locked::after { content: ' 🔒'; }
+
+#death-overlay { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse, rgba(80, 0, 20, 0.35), rgba(0, 0, 0, 0.65)); }
+.death-title { font-size: 56px; font-weight: bold; color: var(--red); letter-spacing: 8px; text-shadow: 0 0 20px rgba(255, 0, 40, 0.8); font-style: italic; }
+#death-detail { margin-top: 8px; font-size: 16px; text-align: center; }
+
+#click-to-play { left: 50%; bottom: 46%; transform: translateX(-50%); background: rgba(10, 4, 20, 0.75); padding: 8px 14px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+#fps { right: 200px; bottom: 10px; font-family: var(--mono); font-size: 12px; color: var(--green); background: rgba(0, 0, 0, 0.5); padding: 2px 6px; border-radius: 4px; }
+#net-status { left: 50%; top: 45%; transform: translateX(-50%); background: rgba(80, 10, 20, 0.85); padding: 10px 18px; border-radius: 8px; font-weight: bold; }
+
+@media (max-width: 900px) {
+  #minimap { width: 120px; height: 120px; }
+  #vitals { width: 170px; }
+  #mission-tracker { max-width: 200px; font-size: 12px; }
+}
