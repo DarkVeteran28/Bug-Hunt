@@ -9,7 +9,7 @@ export default {
   summary: 'Neon Run checkpoints never trigger.',
   description:
     'The Neon Run mission asks you to pass through three glowing checkpoint rings, but isInsideCheckpoint() never reports a hit. ' +
-    'Fix the cylinder test. The server then uses the approved checkpoint rule for your Neon Run, and you unlock the Rifle.',
+    'Fix the cylinder test. The game then uses the approved checkpoint rule for your Neon Run, and you unlock the Rifle.',
   reproduce: [
     'Start the Neon Run by walking into the first magenta checkpoint ring at the crossroads north of the Neon plaza.',
     'Stand in the middle of the ring.',

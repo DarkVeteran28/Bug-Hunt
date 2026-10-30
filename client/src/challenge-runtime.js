@@ -1,8 +1,8 @@
 // Runs challenge functions inside the game on THIS client only.
 // Before a fix: the seeded buggy starter code (the same code shown in the editor).
-// After a verified fix: the player's own verified code, sent back by the server.
+// After a verified fix: the player's own verified code, from the game engine.
 // Code runs in the player's own browser and only affects what they see;
-// anything competitive or security-relevant is decided by the server.
+// rules that matter (unlocks, rewards) are decided by the game engine.
 const compiled = new Map(); // id -> { source, fn }
 const starters = new Map(); // id -> { code, entry }
 const verified = new Map(); // id -> code

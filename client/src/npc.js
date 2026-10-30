@@ -1,6 +1,6 @@
 // Pedestrians walk looping routes using the teleporting-npc challenge
 // function. Mission NPCs (Rico and Vera) stand still and can be talked to.
-import { PEDESTRIAN_ROUTES, MISSION_NPCS } from '/shared/world-data.js';
+import { PEDESTRIAN_ROUTES, MISSION_NPCS } from '../../shared/world-data.js';
 import { callRaw } from './challenge-runtime.js';
 import { createCharacter } from './character.js';
 

@@ -1,7 +1,7 @@
-// Client view of missions, gates and in-world station demos. The server owns
+// Page view of missions, gates and in-world station demos. The game engine owns
 // mission progress and unlocks; this module shows them and runs the local,
 // observable side of each bug.
-import { MISSIONS, MISSION_NPCS, DISTRICTS, districtIndexAt } from '/shared/world-data.js';
+import { MISSIONS, MISSION_NPCS, DISTRICTS, districtIndexAt } from '../../shared/world-data.js';
 import { call } from './challenge-runtime.js';
 import { sfx } from './audio.js';
 
@@ -121,7 +121,7 @@ export class StationDemos {
       'invisible-gate': 'Run a gate test cycle',
       'broken-mission': 'Talk to Rico, then Vera, to see the bug',
       'teleporting-npc': 'Watch the pedestrians to see the bug',
-      'frozen-player': 'Watch other players move to see the bug',
+      'frozen-player': 'Watch a glitch bot move to see the bug',
       'flying-car': 'Drive the green Dock Hauler to see the bug',
       'broken-reload': 'Run a reload drill',
       'infinite-ammo': 'Fire a test burst',
@@ -181,7 +181,7 @@ export class StationDemos {
         const view = { solved: progress.solved, districtsUnlocked: progress.districts, missionsCompleted: progress.missions };
         const rules = { requiredChallenges: ['invisible-gate', 'broken-mission', 'flying-car', 'double-score'], requiredDistricts: 5, minMissions: 2 };
         const r = call('broken-final-gate', [view, rules], null) || { open: false, missing: ['(controller crashed)'] };
-        this.hud.drill(`Vault controller says: ${r.open ? 'OPEN' : 'LOCKED'} · missing: ${(r.missing || []).join(', ') || 'nothing'}<br/><span class="muted">Server truth: ${progress.vaultOpen ? 'vault open' : `locked (missing: ${(progress.vaultMissing || []).join(', ') || 'the Broken Final Gate fix'})`}</span>`);
+        this.hud.drill(`Vault controller says: ${r.open ? 'OPEN' : 'LOCKED'} · missing: ${(r.missing || []).join(', ') || 'nothing'}<br/><span class="muted">Game engine says: ${progress.vaultOpen ? 'vault open' : `locked (missing: ${(progress.vaultMissing || []).join(', ') || 'the Broken Final Gate fix'})`}</span>`);
         setTimeout(() => this.hud.drill(null), 7000);
         break;
       }

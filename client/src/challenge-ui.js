@@ -3,14 +3,15 @@
 import { CodeEditor } from './code-editor.js';
 import { esc } from './combat-ui.js';
 import { sfx } from './audio.js';
-import { DISTRICTS } from '/shared/world-data.js';
+import { DISTRICTS } from '../../shared/world-data.js';
+import { confirmDialog } from './dialog.js';
 
 const $ = (id) => document.getElementById(id);
 const districtName = (id) => (DISTRICTS.find((d) => d.id === id) || {}).name || id;
 
 export class ChallengeUI {
-  constructor({ net, hud, onApplied, onOpenChanged }) {
-    this.net = net;
+  constructor({ session, hud, onApplied, onOpenChanged }) {
+    this.session = session;
     this.hud = hud;
     this.onApplied = onApplied;
     this.onOpenChanged = onOpenChanged;
@@ -84,8 +85,8 @@ export class ChallengeUI {
   async showSolution() {
     if (!this.current || this.busy) return;
     const c = this.current;
-    if (!this.solutionRevealed && !window.confirm(`Put the working fix in the editor? You will get ${c.assistedReward} points for this bug instead of ${c.reward}.`)) return;
-    const r = await this.net.request('challenge:solution', { id: c.id });
+    if (!this.solutionRevealed && !(await confirmDialog(`Put the working fix in the editor? You will get ${c.assistedReward} points for this bug instead of ${c.reward}.`, { ok: 'Show Fix' }))) return;
+    const r = this.session.solution(c.id);
     if (!r || !r.ok) {
       this.hud.toast(r && r.error ? r.error : 'Could not load the fix.', 'warn');
       return;
@@ -131,7 +132,7 @@ export class ChallengeUI {
   }
 
   async open(id) {
-    const r = await this.net.request('challenge:open', { id });
+    const r = this.session.openChallenge(id);
     if (!r || !r.ok) {
       this.hud.toast(r && r.error ? r.error : 'Could not open that challenge.', 'warn');
       return false;
@@ -192,7 +193,7 @@ export class ChallengeUI {
   saveDraftNow() {
     clearTimeout(this.draftTimer);
     if (!this.current) return;
-    this.net.emit('challenge:draft', { id: this.current.id, code: this.editor.getValue() });
+    this.session.saveDraft(this.current.id, this.editor.getValue());
   }
 
   async runTests() {
@@ -201,8 +202,13 @@ export class ChallengeUI {
     const code = this.editor.getValue();
     this.busy = true;
     this.renderStatus();
-    $('ch-output').innerHTML = '<div class="muted">Running your code in the isolated sandbox…</div>';
-    const r = await this.net.request('challenge:run', { id, code }, 15000);
+    $('ch-output').innerHTML = '<div class="muted">Running your code in an isolated test worker…</div>';
+    let r;
+    try {
+      r = await this.session.runTests(id, code);
+    } catch (e) {
+      r = { ok: false, error: `The test runner failed: ${e.message}` };
+    }
     this.busy = false;
     if (!this.current || this.current.id !== id) return;
     if (!r || !r.ok) {
@@ -245,7 +251,7 @@ export class ChallengeUI {
     const id = this.current.id;
     this.busy = true;
     this.renderStatus();
-    const r = await this.net.request('challenge:apply', { id });
+    const r = this.session.applyFix(id);
     this.busy = false;
     if (!r || !r.ok) {
       this.hud.toast(r && r.error ? r.error : 'Could not apply the fix.', 'bad');
@@ -263,16 +269,16 @@ export class ChallengeUI {
     this.renderGuide();
   }
 
-  resetCode() {
+  async resetCode() {
     if (!this.current) return;
-    if (!window.confirm('Reset the editor to the original buggy code? Your current draft will be replaced.')) return;
+    if (!(await confirmDialog('Reset the editor to the original buggy code? Your current draft will be replaced.', { ok: 'Reset', danger: true }))) return;
     this.editor.setValue(this.current.starterCode);
     this.saveDraftNow();
   }
 
   async hint() {
     if (!this.current) return;
-    const r = await this.net.request('challenge:hint', { id: this.current.id });
+    const r = this.session.hint(this.current.id);
     if (r && r.ok) this.renderHints(r.hints, this.current.hintCount);
   }
 
@@ -280,7 +286,7 @@ export class ChallengeUI {
     if (!this.current) return;
     this.saveDraftNow();
     if (document.activeElement && document.getElementById('editor-host').contains(document.activeElement)) document.activeElement.blur();
-    this.net.emit('challenge:close', {});
+    this.session.closeChallenge();
     this.current = null;
     this.verifiedCode = null;
     this.editor.markLines([]);

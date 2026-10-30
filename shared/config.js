@@ -1,19 +1,9 @@
-// Central, tunable game balance. Server and client both import this file,
-// but only the server's copy is trusted for scoring and combat decisions.
+// Central, tunable game balance, used by the game engine and the page.
 
 export const SCORING = Object.freeze({
   bug: { easy: 100, medium: 250, hard: 500, expert: 1000 },
   // Share of the bug reward paid when the player revealed the solution in Easy mode.
   assistedFactor: 0.5,
-  combat: {
-    elimination: 100,
-    // Kills on the same victim inside this window beyond the cap earn nothing
-    // (stops two friends farming each other through respawn loops).
-    farmWindowMs: 120_000,
-    farmCapPerVictim: 3,
-  },
-  arenaRoundWin: 500,
-  hintPenalty: 0,
   cityCleared: 2000,
 });
 
@@ -43,7 +33,6 @@ export const PLAYER = Object.freeze({
   gravity: 22,
   respawnDelayMs: 3000,
   spawnProtectionMs: 3000,
-  disconnectGraceMs: 30_000,
 });
 
 export const VEHICLE = Object.freeze({
@@ -51,25 +40,17 @@ export const VEHICLE = Object.freeze({
   enterRange: 4.5,
 });
 
-export const NET = Object.freeze({
-  clientSendHz: 20,
-  snapshotHz: 15,
-  interestRadius: 260,
-  interpolationDelayMs: 120,
-  // Movement validation tolerance (units/second) on top of the max legit speed.
-  speedTolerance: 1.6,
-});
-
-export const MODES = Object.freeze({
-  freeroam: { id: 'freeroam', name: 'Free Roam', safeDebugging: true, roundMs: 0 },
-  arena: { id: 'arena', name: 'Bug Hunt Arena', safeDebugging: false, roundMs: 8 * 60_000 },
+// Glitch bots are drawn from position reports sent this often, interpolated
+// with the player's Frozen Bots function (see client/src/enemy-view.js).
+export const RELAY = Object.freeze({
+  reportHz: 10,
+  interpolationDelayMs: 150,
+  bufferSize: 12,
 });
 
 export const SANDBOX = Object.freeze({
   maxCodeBytes: 20_000,
-  perTestTimeoutMs: 250,
-  processTimeoutMs: 4000,
-  memoryLimitMb: 64,
-  submissionsPerWindow: 6,
-  submissionWindowMs: 20_000,
+  // The browser test runner stops code that loads or runs a test for longer.
+  compileTimeoutMs: 1500,
+  testTimeoutMs: 1000,
 });

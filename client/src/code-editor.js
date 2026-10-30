@@ -1,6 +1,8 @@
 // Monaco Editor wrapper (loaded from the pinned monaco-editor package via its
 // AMD loader). Falls back to a plain textarea if Monaco cannot load.
 let monacoPromise = null;
+// The pinned Monaco build sits in vendor/ next to client/ (dev server and dist/ alike).
+const MONACO_BASE = new URL('../../vendor/monaco/', import.meta.url).href;
 
 function loadMonaco() {
   if (monacoPromise) return monacoPromise;
@@ -9,10 +11,10 @@ function loadMonaco() {
     if (!req || !req.config) return reject(new Error('Monaco loader missing'));
     window.MonacoEnvironment = {
       getWorkerUrl() {
-        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`self.MonacoEnvironment={baseUrl:'${location.origin}/vendor/monaco/'};importScripts('${location.origin}/vendor/monaco/vs/base/worker/workerMain.js');`)}`;
+        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`self.MonacoEnvironment={baseUrl:'${MONACO_BASE}'};importScripts('${MONACO_BASE}vs/base/worker/workerMain.js');`)}`;
       },
     };
-    req.config({ paths: { vs: '/vendor/monaco/vs' } });
+    req.config({ paths: { vs: `${MONACO_BASE}vs` } });
     req(['vs/editor/editor.main'], () => resolve(window.monaco), reject);
   });
   return monacoPromise;

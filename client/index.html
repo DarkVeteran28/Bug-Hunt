@@ -4,63 +4,71 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vice City: Bug Hunt 3D</title>
-  <link rel="stylesheet" href="/styles/main.css" />
-  <link rel="stylesheet" href="/styles/hud.css" />
+  <link rel="stylesheet" href="./client/styles/main.css" />
+  <link rel="stylesheet" href="./client/styles/hud.css" />
   <script type="importmap">
     {
       "imports": {
-        "three": "/vendor/three/three.module.js",
-        "three/addons/": "/vendor/three-addons/",
-        "@dimforge/rapier3d-compat": "/vendor/rapier/rapier.mjs",
-        "socket.io-client": "/vendor/socket.io/socket.io.esm.min.js"
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three-addons/",
+        "@dimforge/rapier3d-compat": "./vendor/rapier/rapier.mjs"
       }
     }
   </script>
 </head>
 <body>
-  <!-- Lobby -->
-  <div id="lobby" class="overlay">
+  <!-- Main menu -->
+  <div id="main-menu" class="overlay">
     <div class="lobby-card">
       <h1 class="logo"><span class="logo-vice">VICE CITY</span><span class="logo-bug">BUG HUNT 3D</span></h1>
-      <p class="tagline">Explore. Fight. Fix real JavaScript to unlock the city.</p>
-      <label class="field">
-        <span>Player name</span>
-        <input id="lobby-name" maxlength="16" autocomplete="off" placeholder="3-16 letters or numbers" />
-      </label>
-      <div class="lobby-actions">
-        <button id="btn-freeroam" class="btn btn-primary">Play Free Roam</button>
-        <button id="btn-arena" class="btn btn-secondary">Play Bug Hunt Arena</button>
+      <p class="tagline">Explore. Fight glitch bots. Fix real JavaScript to unlock the city.</p>
+      <div class="menu-stack">
+        <button id="btn-continue" class="btn btn-primary" disabled>Continue Game</button>
+        <p id="continue-info" class="muted small">Looking for saved games…</p>
+        <button id="btn-new" class="btn btn-secondary">New Game</button>
+        <button id="btn-load" class="btn" disabled>Load Game…</button>
+        <button id="btn-settings" class="btn">Settings</button>
+        <button id="btn-controls" class="btn">Controls</button>
       </div>
-      <details class="lobby-more">
-        <summary>Private rooms</summary>
-        <div class="row">
-          <select id="create-mode">
-            <option value="freeroam">Free Roam</option>
-            <option value="arena">Bug Hunt Arena</option>
-          </select>
-          <label class="check"><input type="checkbox" id="create-pvp" checked /> PvP combat</label>
-          <button id="btn-create" class="btn">Create room</button>
-        </div>
-        <div class="row">
-          <input id="join-code" maxlength="5" placeholder="Room code" autocomplete="off" />
-          <button id="btn-join" class="btn">Join</button>
-        </div>
-      </details>
-      <p id="lobby-error" class="error" role="alert"></p>
-      <p class="controls-help">WASD move · Mouse look · Click shoot · Right-click aim · Shift sprint · Space jump · E interact / car · F station demo · R reload · 1-4 weapons · Tab scores · Esc menu</p>
+      <p id="save-warning" class="warn-box" hidden></p>
+      <p id="menu-error" class="error"></p>
+      <div id="controls" hidden>
+        <table class="controls-table">
+          <tr><td>W A S D</td><td>Move (drive when in a car)</td></tr>
+          <tr><td>Mouse</td><td>Look around (click the game first)</td></tr>
+          <tr><td>Shift</td><td>Sprint</td></tr>
+          <tr><td>Space</td><td>Jump (brake in a car)</td></tr>
+          <tr><td>E</td><td>Talk, debug a station, enter or exit a car</td></tr>
+          <tr><td>F</td><td>Run a station demo</td></tr>
+          <tr><td>Left click / Right click</td><td>Shoot / aim</td></tr>
+          <tr><td>R · 1-4</td><td>Reload · switch weapon</td></tr>
+          <tr><td>Tab</td><td>Inventory and stats</td></tr>
+          <tr><td>Esc</td><td>Pause menu (Save, Restart, Settings, Exit)</td></tr>
+        </table>
+      </div>
+      <p class="muted small">Single-player. Runs entirely in your browser; progress is saved in this browser.</p>
+    </div>
+    <div id="load-panel" class="overlay" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>LOAD GAME</h2></div>
+        <ul id="load-list" class="load-list"></ul>
+        <div class="menu-actions"><button id="btn-load-close" class="btn">Back</button></div>
+      </div>
     </div>
   </div>
+
+  <div id="loading" class="overlay" hidden><div class="panel"><h2>Loading the city…</h2><p class="muted">Building streets, physics and the code editor.</p></div></div>
 
   <div id="app" hidden>
     <header id="topbar">
       <div class="brand">VICE CITY: <b>BUG HUNT</b></div>
-      <div class="top-stat">PLAYER <b id="top-name">-</b></div>
-      <div class="top-stat">ROOM <b id="top-room">-</b></div>
       <div class="top-stat">SCORE <b id="top-score">0</b></div>
-      <div class="top-stat">RANK <b id="top-rank">-</b></div>
+      <div class="top-stat">CHIPS <b id="top-chips">0/15</b></div>
+      <div class="top-stat">TIME <b id="top-time">0:00</b></div>
+      <div class="top-stat muted" id="save-status">Not saved yet</div>
       <div class="top-spacer"></div>
       <button id="btn-toggle-debug" class="btn btn-small" title="Show or hide the debugging workspace">Debugger ◧</button>
-      <button id="btn-menu" class="btn btn-small" title="Settings (Esc)">⚙</button>
+      <button id="btn-menu" class="btn btn-small" title="Pause menu (Esc)">❚❚ Menu</button>
     </header>
 
     <main id="split">
@@ -78,6 +86,7 @@
           <div id="prompt"></div>
           <div id="shield-badge" hidden>SAFE DEBUGGING SHIELD</div>
           <div id="drill" hidden></div>
+          <div id="vehicle-box" hidden></div>
           <canvas id="minimap" width="180" height="180"></canvas>
           <div id="vitals">
             <div class="bar"><div id="health-fill"></div><span id="health-text">100</span></div>
@@ -91,9 +100,8 @@
             <div class="death-title">FLATLINED</div>
             <div id="death-detail"></div>
           </div>
-          <div id="click-to-play">Click the game to look around · your code is safe while you play</div>
+          <div id="click-to-play">Click the game to start · Esc pauses · your code is saved with the game</div>
           <div id="fps" hidden></div>
-          <div id="net-status" hidden>Reconnecting…</div>
         </div>
       </section>
 
@@ -140,55 +148,66 @@
       <div id="bottom-mission">MISSION: -</div>
       <div class="bottom-stats">
         <span>BUGS FIXED <b id="b-bugs">0/12</b></span>
-        <span>KILLS <b id="b-kills">0</b></span>
-        <span>DEATHS <b id="b-deaths">0</b></span>
+        <span>BOTS STOPPED <b id="b-kills">0</b></span>
+        <span>TIMES DOWN <b id="b-deaths">0</b></span>
         <span>DISTRICT <b id="b-district">-</b></span>
-        <span id="b-round" hidden>ROUND <b id="b-round-time">-</b></span>
       </div>
     </footer>
   </div>
 
-  <div id="leaderboard" class="overlay" hidden>
+  <div id="stats" class="overlay passive" hidden>
     <div class="panel wide">
-      <div class="panel-head"><h2>LEADERBOARD</h2><span class="muted">Hold or toggle with Tab</span></div>
-      <div class="tabs" id="lb-tabs">
-        <button data-board="session" class="active">This room</button>
-        <button data-board="overall">Overall</button>
-        <button data-board="bugs">Most bugs fixed</button>
-        <button data-board="combat">Combat score</button>
-        <button data-board="kd">Best K/D</button>
-        <button data-board="fastest">Fastest fix</button>
-      </div>
-      <div id="lb-body"></div>
-      <div id="lb-profile"></div>
+      <div class="panel-head"><h2>INVENTORY &amp; STATS</h2><span class="muted">Tab to close</span></div>
+      <div class="stats-body"></div>
     </div>
   </div>
 
-  <div id="menu" class="overlay" hidden>
+  <div id="pause" class="overlay" hidden>
     <div class="panel">
       <div class="panel-head"><h2>PAUSED</h2></div>
+      <p id="pause-info" class="muted small"></p>
+      <div class="menu-stack">
+        <button id="btn-resume" class="btn btn-primary">Resume</button>
+        <button id="btn-save" class="btn btn-success">Save Game</button>
+        <button id="btn-restart" class="btn">Restart</button>
+        <button id="btn-pause-settings" class="btn">Settings</button>
+        <button id="btn-exit" class="btn">Exit to Main Menu</button>
+      </div>
+      <p class="muted small">The game is stopped while this menu is open. It also autosaves every minute, after each fix, mission and data chip, and when you leave the tab.</p>
+    </div>
+  </div>
+
+  <div id="settings" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>SETTINGS</h2></div>
       <label class="field"><span>Mouse sensitivity <b id="sens-val"></b></span><input type="range" id="set-sens" min="0.2" max="3" step="0.1" /></label>
       <label class="check"><input type="checkbox" id="set-invert" /> Invert vertical look</label>
       <label class="field"><span>Volume <b id="vol-val"></b></span><input type="range" id="set-vol" min="0" max="1" step="0.05" /></label>
       <label class="check"><input type="checkbox" id="set-mute" /> Mute</label>
-      <label class="field"><span>Graphics</span>
-        <select id="set-gfx"><option value="high">High (shadows)</option><option value="low">Low (lab computers)</option></select>
-      </label>
+      <label class="field"><span>Graphics quality</span><select id="set-gfx"></select></label>
+      <p id="gfx-note" class="muted small" hidden>Graphics quality applies the next time the city loads (Exit to Main Menu, then Continue).</p>
       <label class="field"><span>Lighting</span>
         <select id="set-light"><option value="sunset">Sunset</option><option value="night">Night</option></select>
       </label>
-      <label class="check"><input type="checkbox" id="set-fps" /> Show FPS counter (dev)</label>
+      <label class="check"><input type="checkbox" id="set-fps" /> Show FPS counter</label>
+      <p id="saves-info" class="muted small"></p>
       <div class="menu-actions">
-        <button id="btn-resume" class="btn btn-primary">Resume</button>
-        <button id="btn-leave" class="btn">Leave room</button>
+        <button id="btn-settings-back" class="btn btn-primary">Back</button>
+        <button id="btn-delete-saves" class="btn btn-danger">Delete all saves</button>
       </div>
-      <p class="muted small">Room code: <b id="menu-room"></b> · Mode: <b id="menu-mode"></b> · PvP: <b id="menu-pvp"></b></p>
+    </div>
+  </div>
+
+  <div id="confirm" class="overlay top" hidden>
+    <div class="panel">
+      <p id="confirm-text"></p>
+      <div class="menu-actions"><button id="confirm-ok" class="btn btn-primary">OK</button><button id="confirm-cancel" class="btn">Cancel</button></div>
     </div>
   </div>
 
   <div id="fatal" class="overlay" hidden><div class="panel"><h2>Something went wrong</h2><p id="fatal-text"></p><button class="btn" onclick="location.reload()">Reload</button></div></div>
 
-  <script src="/vendor/monaco/vs/loader.js"></script>
-  <script type="module" src="/src/main.js"></script>
+  <script src="./vendor/monaco/vs/loader.js"></script>
+  <script type="module" src="./client/src/main.js"></script>
 </body>
 </html>

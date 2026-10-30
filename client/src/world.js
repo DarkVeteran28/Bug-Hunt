@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   getWorld, WORLD, DISTRICTS, DISTRICT_WIDTH, AVENUES_Z, CROSS_LOCAL_X, ROAD_HALF, STATIONS,
   districtCenterX, PIER, DOCK, MISSIONS, MISSION_NPCS, GHOST_HOTEL,
-} from '/shared/world-data.js';
+} from '../../shared/world-data.js';
 
 function canvasTexture(w, h, draw) {
   const c = document.createElement('canvas');
@@ -123,11 +123,10 @@ function neonSign(text, color) {
   return m;
 }
 
-export function buildWorld(scene, { graphics }) {
+export function buildWorld(scene, { shadows = false } = {}) {
   const world = getWorld();
   const root = new THREE.Group();
   scene.add(root);
-  const shadows = graphics === 'high';
 
   // --- Ground, sand and roads -------------------------------------------
   const width = WORLD.maxX - WORLD.minX;

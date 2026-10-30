@@ -1,7 +1,7 @@
 // Renderer, camera, sky, lights and water.
 import * as THREE from 'three';
-import { settings, onSettings } from './settings.js';
-import { WORLD } from '/shared/world-data.js';
+import { settings, onSettings, graphicsProfile } from './settings.js';
+import { WORLD } from '../../shared/world-data.js';
 
 const PRESETS = {
   sunset: { top: '#2a0f45', mid: '#c2367a', horizon: '#ff9a5a', fog: '#c96a7c', sun: '#ffd0a0', sunIntensity: 2.2, hemiSky: '#ffb9d6', hemiGround: '#3a1f4a', hemi: 1.1, exposure: 1.0, sunDir: [-0.4, 0.28, -1] },
@@ -9,16 +9,17 @@ const PRESETS = {
 };
 
 export function createScene(host) {
-  const renderer = new THREE.WebGLRenderer({ antialias: settings.graphics === 'high', powerPreference: 'high-performance' });
-  renderer.setPixelRatio(settings.graphics === 'high' ? Math.min(window.devicePixelRatio, 1.75) : 1);
+  const gfx = graphicsProfile();
+  const renderer = new THREE.WebGLRenderer({ antialias: gfx.antialias, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gfx.maxPixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled = settings.graphics === 'high';
+  renderer.shadowMap.enabled = gfx.shadows;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 900);
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.1, Math.max(900, gfx.viewDistance + 100));
 
   // Sky dome with a gradient shader.
   const skyUniforms = {
@@ -55,14 +56,14 @@ export function createScene(host) {
   const hemi = new THREE.HemisphereLight();
   scene.add(hemi);
   const sun = new THREE.DirectionalLight();
-  sun.castShadow = settings.graphics === 'high';
+  sun.castShadow = gfx.shadows;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
   sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60; sc.near = 1; sc.far = 300;
   sun.shadow.bias = -0.0005;
   scene.add(sun);
   scene.add(sun.target);
-  scene.fog = new THREE.Fog('#c96a7c', 120, 520);
+  scene.fog = new THREE.Fog('#c96a7c', gfx.viewDistance * 0.23, gfx.viewDistance);
 
   // Ocean: a low-res grid animated on the CPU.
   const waterGeo = new THREE.PlaneGeometry(WORLD.maxX - WORLD.minX + 600, 400, 60, 20);

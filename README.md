@@ -1,9 +1,13 @@
 # Vice City: Bug Hunt 3D
 
-A browser-based, multiplayer, third-person 3D city game with a neon 1980s
-coastal look. A live JavaScript editor sits beside the game: you unlock the
-city by fixing real, deliberately seeded bugs in the code that runs it, while
-other players explore, drive and shoot around you.
+A single-player, third-person 3D city game with a neon 1980s coastal look. A
+live JavaScript editor sits beside the game: you unlock the city by fixing
+real, deliberately seeded bugs in the code that runs it, while glitch bots
+patrol the streets.
+
+The whole game runs in your browser. There is no game server, no account and
+no network play: it is a static website, and your progress is saved in your
+browser (IndexedDB).
 
 Everything here is original: the city layout is generated from a seeded
 random layout, all models are built from primitives, all sounds are
@@ -12,51 +16,100 @@ music are used.
 
 ## Quick start
 
-Requirements: **Node.js 22.12 or newer** (the sandbox uses `vm.constants.DONT_CONTEXTIFY`
-and the Node permission model) and a browser with WebGL.
+Requires Node.js 20 or newer (only to install and build; the game itself
+needs only a browser with WebGL).
 
 ```bash
-npm ci          # installs the pinned dependencies from package-lock.json
-npm start       # http://localhost:3000
+npm ci            # installs the 3 pinned libraries
+npm run dev       # play from the source tree at http://127.0.0.1:3000
 ```
 
-Open the page, pick a name and press **Play Free Roam**. To play together,
-open a second browser tab (with a different name) or have someone on your
-network open `http://<your-ip>:3000`. Private rooms: open *Private rooms* in
-the lobby, create one, and share the five-letter code.
+Production build:
 
-Environment variables: `PORT` (default 3000), `HOST` (default 0.0.0.0),
-`DB_FILE` (default `data/game.db`).
+```bash
+npm run build     # writes the static site to dist/
+npm start         # serves dist/ at http://127.0.0.1:3000 (PORT and HOST env vars change it)
+```
+
+`dist/` is plain files. Any static host works; the page uses relative paths,
+so it also works from a sub-folder (for example `https://example.com/game/`).
+Opening `dist/index.html` straight from disk (`file://`) does **not** work,
+because browsers block ES modules and workers there; use `npm start` or any
+static web server.
+
+### Hosting on Render (or similar)
+
+On Render, create a **Static Site** from the repository with:
+
+| Setting | Value |
+|---|---|
+| Build command | `npm ci && npm run build` |
+| Publish directory | `dist` |
+
+Render serves static sites over HTTPS by default. `render.yaml` holds the
+same settings as a Blueprint. Netlify, Cloudflare Pages, GitHub Pages and
+Vercel take the same two values. I have not deployed it to Render myself, so
+the first deploy is the real check; nothing in the build depends on Render.
 
 ### Tests
 
 ```bash
-npm test                 # 75 unit + integration tests (node:test, real sandbox, real Socket.IO)
-npm run test:browser     # headless two-player browser run + Easy mode check (needs Playwright, see below)
+npm test               # 55 engine tests (Node's built-in runner, no browser)
+npm run test:browser   # the 14-point browser test (needs Playwright, see below)
 ```
 
-The browser test needs Playwright, which is not a runtime dependency:
-`npm i -D playwright && npx playwright install chromium`.
+The browser test plays the game in headless Chromium. Playwright is not a
+dependency of the game; install it separately (`npm i -g playwright` and
+`npx playwright install chromium`, or point `NODE_PATH` at an existing
+install). `node scripts/browser-test.js --dist` tests the built `dist/`
+instead of the source tree; add `--screenshots <folder>` or
+`--report <file.json>` to keep the evidence.
 
-## Controls
+## How to play
+
+Click **New Game** (or **Continue**). Click the game view to start: the world
+waits for that first click. Walk to the glowing debugging station on the
+plaza and press **E**.
 
 | Key | Action |
 |---|---|
-| W A S D | Move (camera-relative) / drive |
-| Mouse | Look and aim (click the game to capture the mouse) |
-| Left click / Right click | Fire / aim down sights |
-| Shift / Space | Sprint / jump (handbrake in a car) |
-| E | Interact: open a debugging station, talk, enter or exit a car, gate panel |
-| F | Run a station's in-world demonstration of its bug |
-| R / 1-4 | Reload / switch weapon |
-| Tab | Leaderboard and profile |
-| Esc | Pause menu and settings (sensitivity, volume, mute, graphics, lighting, FPS counter) |
+| W A S D | Move (drive when in a car) |
+| Mouse | Look (click the game first) |
+| Shift | Sprint |
+| Space | Jump (brake in a car) |
+| E | Talk, open a debugging station, enter or exit a car |
+| F | Run a station demo |
+| Left / right click | Shoot / aim |
+| R, 1-4 | Reload, switch weapon |
+| Tab | Inventory and stats |
+| Esc | Pause menu |
 
-When the code editor has focus, every key goes to the editor; clicking the
-game hands control back. The divider between the game and the editor can be
-dragged; under 900 px wide the layout stacks vertically.
+- **Glitch bots** (red) patrol the streets, chase you when they see you, and
+  shoot. Stopping one pays 50 points; it comes back after 30 seconds.
+  Bots get tougher district by district.
+- **Pickups:** blue diamonds are data chips (15 in the city, +25 each,
+  collected once), white med kits heal 40, yellow ammo crates refill reserve
+  ammo. Med kits and crates come back after 45 seconds.
+- **Missions:** one per district (pier walk, courier delivery, dock run,
+  Neon Run checkpoints, the vault). The tracker at the top left and the
+  yellow beacon show the next step.
+- **Safe debugging:** while a challenge is open and you are within 9 m of
+  its station, a shield stops all damage (you cannot fire either). You
+  cannot open a station within 4 seconds of a fight.
 
-## How the bug hunt works
+### Menus and saving
+
+- **Main menu:** Continue Game (the newest save that passes its checks),
+  New Game, Load Game (pick a save), Settings, Controls.
+- **Pause menu (Esc):** Resume, Save Game, Restart, Settings, Exit to Main
+  Menu. The game is stopped while it is open.
+- **Autosave** runs every minute of play, a moment after each fix, mission
+  and data chip, when you hide or leave the tab, and on Exit to Main Menu.
+- **Settings:** mouse sensitivity, invert look, volume, mute, graphics
+  quality (High with shadows, Medium, Low), sunset or night lighting, FPS
+  counter. Settings are kept in the browser and written into each save.
+
+## The bug hunt
 
 Twelve challenges live in `challenges/`. Each one is a real function the game
 uses, seeded with a bug you can see in the world:
@@ -64,202 +117,222 @@ uses, seeded with a bug you can see in the world:
 | Challenge | District | What you see before the fix | What the fix changes |
 |---|---|---|---|
 | Ghost Wall (easy) | Ocean Drive | You walk through the Sunset Hotel | The hotel's walls use **your** `aabbOverlap()` and become solid |
-| Broken Car (easy) | Ocean Drive | Every car door is "jammed" | You can enter and drive cars (server checks the approved rule) |
+| Broken Car (easy) | Ocean Drive | Every car door is "jammed" | You can enter and drive cars |
 | Invisible Gate (medium, gate) | Ocean Drive | The gate test cycle opens the door but it stays solid | Unlocks Downtown; the gate's collision runs **your** `updateGate()` |
 | Broken Mission (medium, gate) | Downtown | Delivering Rico's package to Vera never completes | Unlocks Vice Port; the courier mission can complete |
 | Teleporting NPC (medium) | Downtown | Pedestrians zip and snap back to the start of their route | Pedestrians walk using **your** `stepNpc()` |
-| Frozen Player (medium) | Downtown | Other players move in steps and freeze when packets run late | Other players are drawn with **your** `interpolateRemote()` |
+| Frozen Bots (medium) | Downtown | Glitch bots move in steps and freeze | Bots are drawn with **your** `interpolateRemote()` |
 | Flying Car (medium, gate) | Vice Port | The Dock Hauler floats into the sky and gets reset | Unlocks Neon District; the Dock Hauler drives with **your** physics |
 | Broken Reload (hard) | Vice Port | The armory reload drill never finishes | Unlocks the Shotgun |
 | Infinite Ammo (hard) | Neon District | The range blaster's ammo never goes down | Unlocks the SMG |
-| Faulty Checkpoint (hard) | Neon District | Neon Run rings never register you | Neon Run works (server rule); unlocks the Rifle |
+| Faulty Checkpoint (hard) | Neon District | Neon Run rings never register you | Neon Run works; unlocks the Rifle |
 | Double Score (hard, gate) | Neon District | The payout terminal pays a duplicate mission | Unlocks the Industrial Zone |
 | Broken Final Gate (expert, gate) | Industrial Zone | The vault controller reports nonsense; vault stays shut | Opens the Final Vault once your real progress qualifies |
 
-Lifecycle: walk to a glowing station, press **E**. The challenge opens in the
-right panel while the 3D game keeps running. Edit the function and press
-**Run Tests**. The server runs your code in the sandbox against visible and
-hidden tests and shows each result. **Apply Fix** only enables after every
-test passes; applying it records the verified submission, pays the reward
-once and switches the game behaviour. Drafts are saved to the server as you
-type, so dying, disconnecting or closing the editor never loses work.
+Press **Run Tests** to run your code against visible and hidden tests in a
+separate Web Worker. **Apply Fix** only enables after every test passes; it
+pays the reward once and switches the game behaviour. Drafts are kept as you
+type and saved with the game.
 
-### Easy mode
-
-Easy mode is on by default (toggle it at the top of the challenge panel; the
-choice is remembered in the browser). It adds:
-
-- a "What's wrong" box that explains every seeded bug in plain words, with its
-  line number (click a note to jump to the line);
-- yellow highlights on the buggy lines in the editor, with the explanation on
-  hover; a note switches to "Edited" once you change that line;
-- a tip under failing tests to compare "expected" with "received";
-- a **Show Fix** button that puts the reference fix in the editor. You still
-  run the tests and apply it, but that bug then pays half its reward
-  (`SCORING.assistedFactor`) and does not count for the fastest-fix
-  leaderboard. The server remembers that the fix was shown.
-
+**Easy mode** (on by default, toggle at the top of the challenge panel)
+explains every seeded bug in plain words, highlights the buggy lines, and
+offers **Show Fix**, which fills in the reference fix for half the reward.
 The explanations live in `challenges/guides.js`.
 
-### Where fixed code runs
-
-- **On your own client**, for things that only affect what you see or how
-  you move (hotel collision, gate collision, pedestrians, remote-player
-  interpolation, Port car physics, the station demos), the game runs the exact
-  code you verified. Before the fix it runs the seeded buggy code, which is
-  the same code shown in the editor.
-- **On the server**, for anything competitive or security-relevant (vehicle
-  entry, mission state, checkpoints, the final gate, district unlocks, combat,
-  scoring), the server uses its own approved implementation once you have
-  fixed the challenge. Before the fix it uses the buggy rule, but always
-  combined with the approved rule (`buggy && approved`), so an unfixed bug can
-  only make things harder, never grant something the real rule would refuse.
-  Player code never runs in the game server.
-- Infinite Ammo, Broken Reload and Double Score operate on training
-  equipment (range blaster, reload bench, payout terminal). Real weapons and
-  real scoring are always validated by the server.
+The "Frozen Player" challenge became **Frozen Bots**: there are no other
+players any more, so its interpolation function now draws the glitch bots
+(see `client/src/enemy-view.js`). Its id is still `frozen-player`.
 
 ## Architecture
 
 ```
-client/            Browser game (ES modules, no framework, no bundler)
-  src/scene.js           renderer, sky, lights, water
-  src/world.js           city meshes from shared world data (merged + instanced)
-  src/physics.js         Rapier colliders, kinematic character/car controllers
-  src/player-controller.js, camera-controller.js, vehicle-controller.js
-  src/weapon-controller.js, combat-ui.js (HUD), minimap.js, npc.js
-  src/multiplayer.js     Socket.IO client, reconnect, interpolation buffers
-  src/mission-manager.js missions, gates, station demos
-  src/challenge-ui.js, code-editor.js (Monaco), challenge-runtime.js
-  src/leaderboard.js, layout.js, settings.js, audio.js, input.js, game.js, main.js
-shared/            Used by both sides: world layout, balance config
-server/
-  index.js               Express + Socket.IO, static files, HTTP API
-  socket-handler.js      event validation and rate limits
-  room-manager.js        rooms, movement validation, snapshots, rounds
-  combat-manager.js      server-authoritative shooting
-  mission-manager.js     missions from validated positions
-  challenge-manager.js   open / draft / hint / run / apply
-  progression.js         districts, gates, weapons, vault
-  game-logic.js          approved and seeded rules for server-side behaviour
-  sandbox-runner.js      spawns the isolated challenge worker
-  database.js            SQLite schema and queries
-sandbox/worker.js  Separate locked-down process that runs player code
-challenges/        12 challenges (easy/medium/hard/expert)
-tests/             node:test suites
-scripts/browser-smoke.js  headless two-player browser test
+index page (client/index.html)
+ ├─ main.js        main menu, settings screen, boot, New/Continue/Load
+ ├─ game.js        frame loop, pause, interactions, HUD events, saving
+ │   ├─ scene, world, physics (Rapier), camera, player, vehicles, NPCs
+ │   ├─ enemy-view, pickup-view, effects (pooled tracers)   ← draw the engine's state
+ │   ├─ weapon-controller   asks the engine to fire, draws the result
+ │   ├─ challenge-ui + code-editor (Monaco) + sandbox-runner (Web Worker)
+ │   └─ save-store          IndexedDB slots, localStorage fallback
+ └─ engine/ (no DOM; runs in the browser and in Node for tests)
+     ├─ session.js     GameSession: the one game, its clock, events, snapshot()
+     ├─ store.js       score events, stats, challenge progress, missions, chips
+     ├─ progression.js districts, gates, weapons, vault
+     ├─ missions.js    mission steps and rewards
+     ├─ challenges.js  open / hint / run / apply for the 12 bugs
+     ├─ combat.js      hitscan weapons, ammo, reload, line of sight
+     ├─ enemies.js     glitch bot AI (patrol, chase, shoot, return, respawn)
+     ├─ pickups.js     data chips, med kits, ammo crates
+     ├─ game-logic.js  the approved rules used after each fix
+     └─ save.js        save format, checksum and validation
 ```
 
-Dependencies are pinned exactly in `package.json` and `package-lock.json`:
-three 0.180.0, @dimforge/rapier3d-compat 0.18.2, monaco-editor 0.52.2,
-socket.io / socket.io-client 4.8.1, express 5.1.0, better-sqlite3 12.4.1.
-The client loads them from `node_modules` through the server (no CDN).
+- **One loop.** `game.js` runs one `requestAnimationFrame` loop. Each frame it
+  moves the player or car with Rapier, then calls `session.update(dt)` (bots,
+  respawns, reloads) and `session.setPosition()` (locked districts, missions,
+  pickups). The engine reports what happened through events (`damaged`,
+  `kill`, `pickup`, `mission`, `progress`, `autosave`, ...) and the page draws
+  it.
+- **Game clock.** The engine's clock only advances inside `update()`, so
+  pausing stops bots, respawn timers, reloads, pickups and play time.
+- **Rules.** Before a fix, the engine uses the seeded buggy rule combined
+  with the approved one (`buggy && approved`), so an unfixed bug can only make
+  things harder. After the fix it uses the approved rule. Visual behaviour
+  (hotel walls, gate, pedestrians, bots, the Dock Hauler, station demos) runs
+  the exact code you verified.
+- **No backend.** The game does not need a server for anything. The tiny
+  `scripts/serve.js` only serves files for local play and tests.
 
-### Challenge sandbox
+### Save and load
 
-Player code never runs in the game server process. For each submission the
-server spawns `sandbox/worker.js` as a separate Node process:
+`engine/save.js` defines the save file:
 
-- Node permission model on (`--permission`): no file writes, no child
-  processes, no worker threads; file reads limited to the worker file itself.
-- Empty environment (no secrets), 64 MB heap limit, 4 s wall-clock kill,
-  250 ms per test, 20 KB code limit, 6 runs per 20 s per player, at most 3
-  sandboxes at once.
-- Inside the process the code runs in a fresh V8 realm
-  (`vm.constants.DONT_CONTEXTIFY`) with string code generation disabled, so
-  `process`, `require`, `eval` and `new Function` are unavailable, and the
-  classic `constructor.constructor` escape fails. Arguments go in and results
-  come out as JSON text, so no host objects are shared.
-- Tests and expected values stay in the worker's host realm; hidden tests do
-  not reveal their inputs, so hard-coding visible answers fails.
+```
+{ format: "vice-city-bughunt-save", version: 1, savedAt, playTimeMs, label,
+  summary: { score, bugsFixed, missions, district },
+  settings: { sensitivity, invertY, volume, muted, graphics, lighting, showFps },
+  state: {
+    clockMs, killSeq,
+    player: { pos, ry, health, equipped, loadout: { pistol: { ammo, reserve }, ... } },
+    missionState: { "m-ocean": { step, courier }, ... },
+    store: { scoreEvents, stats, attempts, challengeProgress (drafts, hints,
+             verified code), completions (fixed bugs and their code),
+             missions (completed), collected (data chips) },
+    enemies: [{ id, alive, health, respawnInMs }],
+    vehicles: [[x, y, z, heading], ...] },
+  checksum }
+```
 
-Limits to be aware of: Node's permission model does not restrict outgoing
-network access, and `vm` is not a hard security boundary on its own. For a
-public deployment, run the worker inside a container or VM with networking
-disabled (e.g. `docker run --network none`); the runner interface
-(`runSubmission`) is small so it can be swapped for a container runner.
+- **Where:** IndexedDB database `vice-city-bughunt`, two slots: `manual`
+  (Save Game) and `auto` (autosave). Writing a slot first copies the old save
+  to `<slot>-backup`. If IndexedDB is unavailable (some private windows), the
+  same slots go to localStorage.
+- **Checks:** every save carries an FNV-1a checksum of its state. Loading
+  parses the JSON, checks the checksum, then validates every field (types,
+  ranges, known challenge and mission ids, position inside the city). A save
+  is also checked before it is written.
+- **New Game** starts from the fixed starting state. **Continue** loads the
+  newest save that passes all checks. **Load Game** lists every save.
+  **Save Game** writes the manual slot. **Restart** reloads the page into a
+  new game (saves are kept). **Exit to Main Menu** autosaves, then reloads.
+- **Damaged saves** (truncated, edited, wrong version) are never loaded. The
+  main menu names the damaged slot and the reason, and Continue falls back to
+  the newest intact save, usually the backup.
+- A save made in a car stores the spot beside the car. A save made while
+  down restores you alive at full health.
 
-### Multiplayer and anti-cheat
+Restart and Exit reload the page instead of tearing the game down in place.
+A reload frees every GPU buffer, physics body and event listener at once,
+which is the most reliable way to avoid leaks between games.
 
-- Clients send intents (move, fire with a direction, open, run tests); the
-  server decides outcomes.
-- Movement: speed limit per update, height limits, world bounds, locked
-  districts and the vault are enforced; violations snap the player back.
-- Combat: the server picks the shot origin from your validated position and
-  checks weapon ownership, equipped weapon, cooldown (with a jitter
-  allowance that cannot raise the sustained rate), ammo, reload timing,
-  range, line of sight against the city geometry, spawn protection, the
-  debugging shield, PvP settings and death state. Damage values come from the
-  server's weapon table; client-sent damage or targets are ignored.
-- Rewards: every score event has a unique reference in SQLite
-  (`UNIQUE(player_id, kind, ref)`), so challenges, missions and kills pay
-  once. Kills on the same victim stop paying after 3 in 2 minutes. Bug points,
-  combat points and mission points are stored and shown separately.
-- Network: 20 Hz client updates, 15 Hz snapshots with compact arrays, and
-  interest management (players beyond 260 m are not sent). Disconnected
-  players are kept for 30 s and resume their state on reconnect.
+### Performance
 
-### Debugging while under fire
+- Effects are pooled: 64 tracer lines and 48 impact sparks are created once
+  and recycled; pickups share one geometry and material per kind; each bot
+  keeps one model through death and respawn. The browser test checks that
+  firing hundreds of shots adds no scene objects or GPU buffers.
+- Bots look for you 5 times a second, not every frame. Bots more than 110 m
+  away or in another district only follow their patrol loop. Far bots skip
+  animation; far pedestrians are hidden.
+- Graphics quality: **High** (shadows, antialiasing, up to 1.75x pixel
+  ratio, 520 m view), **Medium** (default: no shadows, antialiasing, 1.25x,
+  420 m), **Low** (no shadows or antialiasing, 1x, 300 m). It applies the
+  next time the city loads.
+- The target is 60 FPS on hardware that allows it; that is a target, not a
+  guarantee. I have **not** measured frame rate on real graphics hardware.
+  The only numbers I have are from the headless test machine, which renders
+  in software (about 21-28 FPS there), so they say nothing about a real
+  computer. Turn on the FPS counter in Settings to see yours.
 
-- **Free Roam:** safe debugging. While your editor is open and you are within
-  9 m of the station, you have a shield: you cannot be damaged and cannot
-  fire. Walking away drops it. You cannot open a station within 4 s of combat.
-- **Bug Hunt Arena:** no shield. If you die, the editor stays open, the draft
-  is saved, and you keep working while you respawn. Rewards are never lost or
-  duplicated.
+## Dependencies
 
-### Game modes
+Runtime libraries (exact versions, copied into `dist/vendor/`, no CDN):
 
-- **Free Roam** (public room, or private with PvP on/off).
-- **Bug Hunt Arena** (8-minute rounds; session scores reset each round; the
-  round winner gets a configurable bonus).
+| Package | Version | Used for |
+|---|---|---|
+| `three` | 0.180.0 | 3D rendering |
+| `@dimforge/rapier3d-compat` | 0.18.2 | Physics and collisions |
+| `monaco-editor` | 0.52.2 | The code editor |
 
-Balance values (weapons, points, timings, limits) are all in `shared/config.js`.
+Removed in the single-player conversion: `express`, `socket.io`,
+`socket.io-client` and `better-sqlite3`. The Redis and Postgres clients from
+the abandoned cluster work are not in this version either. There are no dev dependencies; tests use
+Node's built-in runner. Licences of the shipped libraries are in
+`LICENSES.txt`.
 
-## Status: what is done and tested, and what is not
+## What changed from the multiplayer version
 
-Done and covered by automated tests (`npm test`, `npm run test:browser`):
+Removed: the Express/Socket.IO game server, rooms, lobby, matchmaking, player
+names and tokens, reconnection, snapshots and remote-player rendering, server
+movement validation, the SQLite database, PvP, the multiplayer leaderboard,
+Arena rounds and anti-farming. The unfinished 4-laptop cluster work (Redis,
+gateways, load tests) is kept only on the git branch `archive/cluster-attempt`
+and is not part of this version.
 
-- 3D city with five districts, roads, beach, pier, port containers, neon
-  signs, palms, streetlights, sunset/night lighting, water; minimap.
-- Third-person controller (walk, sprint, jump, gravity, Rapier collisions,
-  camera collision, falling out of the map respawns you).
-- Six drivable cars with enter/exit, collisions and server-side position checks.
-- Pistol, SMG, Shotgun, Rifle with server-validated hits, ammo, reload,
-  cooldowns, range and line of sight; kill feed; death and respawn with spawn
-  protection and safe spawn selection; anti-farming.
-- Split-screen Monaco editor with draggable divider and stacked layout;
-  editor focus blocks game keys (browser test).
-- Twelve challenges, each verified: the reference solution passes and the
-  seeded bug fails. Fixes change the game (browser test covers Ghost Wall,
-  Broken Car and Invisible Gate end to end; server tests cover car entry,
-  courier mission, checkpoints, gates and the vault).
-- Sandbox isolation tests: infinite loops, memory bombs, `process`/`require`/
-  `eval` escapes, JSON tampering, hard-coded answers, oversized code.
-- Rooms (public and private), join/leave notifications, reconnection,
-  session and persistent leaderboards (overall, bugs fixed, combat, K/D,
-  fastest fix), profile with accuracy, SQLite persistence.
+Moved: the game rules (progression, missions, challenges, combat) moved from
+`server/` to `engine/` and now run in the page. Challenge tests now run in a
+Web Worker with a watchdog instead of a server-side child process.
 
-Implemented but only lightly tested (manual or indirect):
+Added: glitch bot enemies, pickups and data chips, main menu, pause menu,
+save/load with autosave and backups, Tab inventory and stats panel, vehicle
+HUD, three graphics levels, the static build, and the browser test below.
 
-- Teleporting NPC, Frozen Player, Flying Car, Broken Reload, Infinite Ammo,
-  Double Score and Final Gate in-world effects (the client wiring runs every
-  frame in the browser test, and the browser test checks that buggy
-  pedestrians teleport, but there is no automated before/after check for each).
-- Arena rounds (unit-tested on the server; not played through in a browser).
-- Audio, lighting presets, low-graphics mode, FPS counter.
+## Testing report
 
-Not implemented yet:
+Run on 30 October 2026 with Node 22 and headless Chromium (software WebGL).
 
-- Optional team mode and cooperative shared checkpoints.
-- Vehicle health, repair garages and vehicle unlock/selection.
-- Building interiors and enter/exit animations (cars switch instantly).
-- Projectile weapons (all weapons are hitscan) and lag compensation (hits are
-  checked against the latest server positions).
-- Real accounts: identity is a random token stored in the browser per name.
-- Server-side collision with buildings for movement validation (speed, height,
-  bounds and locked areas are checked, but wall-clipping by a modified client
-  is not).
-- Load testing: capacity has **not** been measured. Rooms are capped at 16
-  players; do not assume more until it is load-tested.
-- Daily/session objectives.
+**Engine tests (`npm test`): 55 passed, 0 failed.** They cover the new-game
+state, locked districts, missions paid once, the courier mission, car doors,
+weapons (cooldown, ammo, reload, unlocks), bots (kill, respawn, shooting the
+player, the debugging shield), pickups, falling out of the map, a full city
+clear, save round trips, damaged and edited saves, all 12 challenges
+(reference fix passes, seeded bug fails), Easy mode and the test runner.
+
+**Browser test (`npm run test:browser`): 14 of 14 checks passed**, on three
+consecutive runs against the source tree and once against `dist/`:
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Game loads | Pass | Main menu shown; city ready about 3 s after New Game |
+| 2 | Main menu works | Pass | Continue disabled with no save; Controls, Settings, Back; settings stored |
+| 3 | New Game starts correctly | Pass | Spawn (30, 0, -40), health 100, score 0, Ocean Drive and pistol only, 15 bots; world waits for the first click |
+| 4 | Movement works | Pass | Walk 5.0 m/s, sprint 8.5 m/s (per second of game time), jump peak about 1 m, lands again |
+| 5 | Camera works | Pass | Mouse turns and tilts the camera; it follows the player |
+| 6 | Collision works | Pass | Walking into a building stops at its wall |
+| 7 | NPCs and interactions work | Pass | Pedestrians walk; debugger fix via E, Run Tests, Apply Fix; car door jammed then fixed; driving and vehicle HUD; talking to Rico; bots patrol, shoot and can be stopped; an infinite loop in player code is stopped after 1 s |
+| 8 | Missions can be completed | Pass | "Welcome to Vice" completes and pays 150; data chip collected; Tab panel |
+| 9 | Pause and resume | Pass | Clock, play time and pedestrians frozen while paused; run again after Resume |
+| 10 | Save and load | Pass | Save Game to IndexedDB; after reload Continue restores score, fixes, chips, missions, courier step, position, gates, play time; a damaged save is reported and the intact one loads |
+| 11 | Restart | Pass | Asks first; returns to the starting state; saves kept |
+| 12 | No multiplayer or network dependencies | Pass | No WebSocket opened; every request stayed on the static site; no networking globals |
+| 13 | Works after a refresh | Pass | A fix made just before the refresh is restored from the autosave |
+| 14 | No major console errors or leaks | Pass | No console errors or exceptions in the whole run; scene object count unchanged and GPU geometries +2 after hundreds of shots; JS heap grew under 0.2 MB (about 24.7 MB) after garbage collection |
+
+What the browser test does not prove:
+
+- It moves the player by teleporting in small steps between checks, and
+  keeps the bots out of the way outside the combat check, so runs are
+  repeatable. Walking, sprinting, jumping, driving and shooting themselves are
+  tested with real key presses.
+- It measures memory over a few minutes, not hours.
+- Frame rate on real hardware is not measured (see Performance).
+- Sound, the night lighting preset and the High graphics level are not
+  checked automatically.
+- Of the twelve fixes, the browser test applies Ghost Wall, Broken Car and
+  Invisible Gate end to end; the engine tests cover the rule changes of the
+  rest, and the in-world effects of Teleporting NPC, Frozen Bots, Flying Car
+  and the station demos have no automated before/after check.
+
+## Known limits
+
+- **Cheating is possible.** Everything runs in your browser, including the
+  reference fixes and hidden tests, so a player can read them in the page
+  source or edit their save. That is acceptable for a single-player game;
+  the save checksum only catches damage, not deliberate edits.
+- Saves live in one browser on one computer. Clearing site data deletes
+  them, and there is no export, import or cloud sync yet.
+- No touch controls: it needs a keyboard and mouse.
+- Graphics quality changes apply on the next load, not instantly.
+- All weapons are hitscan; bots do not take cover or use doors.
+- Not implemented: building interiors, vehicle damage, more mission types,
+  difficulty settings, rebindable keys.

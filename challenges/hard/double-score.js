@@ -8,7 +8,7 @@ export default {
   summary: 'The payout terminal pays the same mission twice.',
   description:
     'The Neon payout terminal batches mission completions with applyCompletions(). When the same mission appears twice in one batch it is paid twice, and bogus rewards are accepted. ' +
-    'The real game server keeps its own approved, database-enforced deduplication; this terminal is a training ledger. Fixing it is the mandatory Neon challenge and unlocks the Industrial Zone.',
+    'The game engine keeps its own approved deduplication; this terminal is a training ledger. Fixing it is the mandatory Neon challenge and unlocks the Industrial Zone.',
   reproduce: [
     'Go to the Payout Terminal on the Neon plaza.',
     'Press E to process a test batch that contains a duplicate mission.',

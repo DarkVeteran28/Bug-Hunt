@@ -1,9 +1,9 @@
-// Vehicles: meshes, interpolation of server state, and local driving.
+// Vehicles: meshes, parked positions and driving.
 // Most cars use the built-in arcade model. The Vice Port "Dock Hauler" runs
 // on the flying-car challenge function, so its bug is visible until fixed.
 import * as THREE from 'three';
-import { VEHICLE_SPAWNS } from '/shared/world-data.js';
-import { VEHICLE } from '/shared/config.js';
+import { VEHICLE_SPAWNS } from '../../shared/world-data.js';
+import { VEHICLE } from '../../shared/config.js';
 import { input } from './input.js';
 import { call } from './challenge-runtime.js';
 import { sfx } from './audio.js';
@@ -89,7 +89,6 @@ export class VehicleController {
         id: spec.id, index, spec, mesh,
         pos: new THREE.Vector3(...spec.pos), ry: spec.ry,
         target: new THREE.Vector3(...spec.pos), targetRy: spec.ry,
-        driver: 0,
       };
     });
     this.byId = new Map(this.vehicles.map((v) => [v.id, v]));
@@ -97,24 +96,27 @@ export class VehicleController {
     this.onReset = () => {};
   }
 
-  /** Apply the vehicle array from a server snapshot. */
-  applySnapshot(list, myId) {
-    for (const [index, x, y, z, ry, driver] of list) {
-      const v = this.vehicles[index];
-      if (!v) continue;
-      v.driver = driver;
-      if (this.driving && this.driving.v === v) continue;
-      v.target.set(x, y, z);
-      v.targetRy = ry;
-      if (v.pos.distanceTo(v.target) > 30) v.pos.copy(v.target);
-    }
+  /** Parked positions for a save file: [[x, y, z, ry], ...]. */
+  poses() {
+    return this.vehicles.map((v) => [v.pos.x, Math.max(0, v.pos.y), v.pos.z, v.ry]);
+  }
+
+  /** Put the cars back where a save left them. */
+  setPoses(list) {
+    if (!Array.isArray(list)) return;
+    list.forEach((p, i) => {
+      const v = this.vehicles[i];
+      if (!v || !Array.isArray(p) || p.length !== 4 || !p.every(Number.isFinite)) return;
+      v.pos.set(p[0], p[1], p[2]);
+      v.target.copy(v.pos);
+      v.ry = v.targetRy = p[3];
+    });
   }
 
   nearest(pos, range = VEHICLE.enterRange) {
     let best = null;
     let bestD = range;
     for (const v of this.vehicles) {
-      if (v.driver) continue;
       const d = Math.hypot(v.pos.x - pos.x, v.pos.z - pos.z);
       if (d < bestD) {
         bestD = d;
@@ -152,7 +154,7 @@ export class VehicleController {
     }
   }
 
-  /** Drive the local car for one frame. Returns the car pose for networking. */
+  /** Drive the car for one frame. Returns the car pose. */
   drive(dt) {
     const d = this.driving;
     if (!d) return null;

@@ -9,7 +9,7 @@ export default {
   summary: 'The shooting-range blaster never runs out of ammo.',
   description:
     'The Neon shooting range uses tryFire() for its training blaster. Its ammo counter never goes down, and an empty blaster can still fire. ' +
-    'This only affects the range blaster: competitive weapons are always validated by the server. Fixing it unlocks the SMG.',
+    'This only affects the range blaster: your real weapons are always handled by the game engine. Fixing it unlocks the SMG.',
   reproduce: [
     'Go to the Shooting Range Console in the Neon District.',
     'Press E to fire a test burst of six shots.',

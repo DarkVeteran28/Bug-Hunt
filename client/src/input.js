@@ -33,7 +33,7 @@ export function initInput(canvasHost) {
   lockTarget = canvasHost;
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') {
-      // Tab toggles the leaderboard, but only outside text fields.
+      // Tab toggles the inventory and stats panel, but only outside text fields.
       if (!typingTarget(e.target)) {
         e.preventDefault();
         if (!e.repeat) emit('tab');

@@ -1,8 +1,8 @@
 // Rapier physics: static city colliders, toggleable gates, kinematic
 // character / car controllers and camera ray casts.
 import RAPIER from '@dimforge/rapier3d-compat';
-import { getWorld, WORLD, PIER, DOCK, VEHICLE_SPAWNS } from '/shared/world-data.js';
-import { PLAYER } from '/shared/config.js';
+import { getWorld, WORLD, PIER, DOCK, VEHICLE_SPAWNS } from '../../shared/world-data.js';
+import { PLAYER } from '../../shared/config.js';
 
 export async function createPhysics() {
   await RAPIER.init();

@@ -1,5 +1,5 @@
 // Registry of all bug challenges. Tests and reference solutions stay on the
-// server; the client only ever receives the public view.
+// game engine; the page only ever receives the public view.
 import ghostWall from './easy/ghost-wall.js';
 import brokenCar from './easy/broken-car.js';
 import invisibleGate from './medium/invisible-gate.js';

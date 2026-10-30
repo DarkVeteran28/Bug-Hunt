@@ -1,8 +1,13 @@
-// Game orchestration: owns the frame loop and connects rendering, physics,
-// player control, vehicles, weapons, networking, missions and the debugger.
+// The page side of a single-player game: owns the frame loop and connects
+// rendering, physics, player control, vehicles, weapons, the debugger, menus
+// and saving to one GameSession (engine/session.js), which decides the rules.
+//
+// Pausing stops the simulation: the engine clock, physics, enemies, respawn
+// timers and play time all stand still until Resume.
 import * as THREE from 'three';
-import { WEAPONS, NET, PLAYER } from '/shared/config.js';
-import { DISTRICTS, districtIndexAt, STATIONS, getWorld, VEHICLE_SPAWNS } from '/shared/world-data.js';
+import { WEAPONS } from '../../shared/config.js';
+import { DISTRICTS, districtIndexAt, STATIONS, getWorld, VEHICLE_SPAWNS } from '../../shared/world-data.js';
+import { buildSave } from '../../engine/save.js';
 import { createScene } from './scene.js';
 import { buildWorld } from './world.js';
 import { createPhysics } from './physics.js';
@@ -10,47 +15,56 @@ import { CameraController } from './camera-controller.js';
 import { PlayerController } from './player-controller.js';
 import { VehicleController } from './vehicle-controller.js';
 import { WeaponController } from './weapon-controller.js';
+import { EnemyView } from './enemy-view.js';
+import { PickupView } from './pickup-view.js';
+import { EffectPool } from './effects.js';
 import { createCharacter } from './character.js';
 import { NpcManager } from './npc.js';
 import { Minimap } from './minimap.js';
 import { MissionView, GateController, StationDemos } from './mission-manager.js';
 import { ChallengeUI } from './challenge-ui.js';
-import { Leaderboard } from './leaderboard.js';
-import { Hud, esc } from './combat-ui.js';
-import { RemoteState, INTERP_DELAY } from './multiplayer.js';
-import { input, initInput, on as onInput, releasePointer } from './input.js';
+import { StatsPanel } from './stats-panel.js';
+import { Hud, esc, formatTime } from './combat-ui.js';
+import { input, initInput, on as onInput, releasePointer, requestPointer } from './input.js';
 import { sfx, unlockAudio } from './audio.js';
-import { settings, saveSettings, onSettings } from './settings.js';
+import { settings, graphicsProfile, savedSettings } from './settings.js';
 import { initLayout } from './layout.js';
 import { registerChallenges, setVerifiedCode, setErrorHandler } from './challenge-runtime.js';
+import { writeSave } from './save-store.js';
+import { confirmDialog } from './dialog.js';
 
-const WEAPON_IDS = Object.keys(WEAPONS);
-const ANIMS = ['idle', 'walk', 'run', 'jump', 'drive'];
 const STATION_RANGE = 3.6;
+const AUTOSAVE_EVERY_MS = 60_000;
 
 export class Game {
-  constructor(net, welcome) {
-    this.net = net;
-    this.welcome = welcome;
+  /**
+   * session      a GameSession (new or restored from a save)
+   * playTimeMs   play time already on the save
+   * menus        { openSettings(onBack), restart(), exitToMenu() } from main.js
+   */
+  constructor({ session, playTimeMs = 0, menus }) {
+    this.session = session;
+    this.menus = menus;
     this.hud = new Hud();
-    this.remotes = new Map();
-    this.rosterById = new Map();
-    this.progress = null;
-    this.alive = true;
-    this.health = PLAYER.maxHealth;
+    this.playTimeMs = playTimeMs;
+    this.paused = false;
+    // The world waits for the first click into the game before it starts moving.
+    this.started = false;
     this.debugOpen = null;
-    this.shielded = false;
-    this.spawnProtected = false;
-    this.lastSend = 0;
     this.lastDistrict = -1;
-    this.room = null;
-    this.roundEndsAt = null;
     this.frames = 0;
     this.fpsTime = 0;
     this.running = false;
+    this.sinceAutosave = 0;
+    this.autosaveTimer = null;
+    this.saving = null;
+    this.lastSavedAt = null;
+    this.tmpFocus = new THREE.Vector3();
   }
 
   async init() {
+    const s = this.session;
+    const gfx = graphicsProfile();
     const host = document.getElementById('canvas-host');
     this.view = createScene(host);
     this.layout = initLayout(() => {
@@ -58,130 +72,194 @@ export class Game {
       if (this.challengeUI) this.challengeUI.editor.layout();
     });
     this.physics = await createPhysics();
-    this.world = buildWorld(this.view.scene, { graphics: settings.graphics });
+    this.world = buildWorld(this.view.scene, { shadows: gfx.shadows });
     this.camCtl = new CameraController(this.view.camera, this.physics);
-    this.avatar = createCharacter({ color: '#ff4fa3', seed: this.welcome.id, shadows: settings.graphics === 'high' });
+    this.avatar = createCharacter({ color: '#ff4fa3', seed: 1, shadows: gfx.shadows });
     this.view.scene.add(this.avatar.root);
     this.player = new PlayerController(this.physics, this.camCtl, this.avatar);
-    this.vehicles = new VehicleController(this.view.scene, this.physics, { shadows: settings.graphics === 'high' });
-    this.vehicles.onReset = (v, msg) => {
-      this.hud.toast(msg, 'warn', 6000);
-      this.sendState(true);
-    };
-    this.weapons = new WeaponController({ scene: this.view.scene, camera: this.view.camera, camCtl: this.camCtl, physics: this.physics, net: this.net, hud: this.hud });
-    this.npcs = new NpcManager(this.view.scene, { shadows: settings.graphics === 'high' });
+    this.player.ry = s.player.ry;
+    this.camCtl.yaw = s.player.ry + Math.PI;
+    this.player.teleport(s.player.pos);
+    this.vehicles = new VehicleController(this.view.scene, this.physics, { shadows: gfx.shadows });
+    this.vehicles.setPoses(s.vehiclePoses);
+    this.vehicles.onReset = (v, msg) => this.hud.toast(msg, 'warn', 6000);
+    this.effects = new EffectPool(this.view.scene);
+    this.weapons = new WeaponController({ camera: this.view.camera, camCtl: this.camCtl, physics: this.physics, session: s, hud: this.hud, effects: this.effects });
+    this.enemyView = new EnemyView(this.view.scene, { shadows: false, detailRange: gfx.enemyDetailRange });
+    this.weapons.onHit = (h) => this.enemyView.hit(h.id);
+    this.pickupView = new PickupView(this.view.scene, s.pickupsView());
+    this.npcs = new NpcManager(this.view.scene, { shadows: gfx.shadows });
     this.minimap = new Minimap(document.getElementById('minimap'));
     this.missionView = new MissionView({ world: this.world, hud: this.hud });
     this.gates = new GateController({ world: this.world, physics: this.physics });
     this.demos = new StationDemos({ hud: this.hud, gates: this.gates, weapons: this.weapons });
-    this.leaderboard = new Leaderboard({ net: this.net });
-    this.leaderboard.myId = this.welcome.id;
-    this.hud.myId = this.welcome.id;
-    registerChallenges(this.welcome.challenges);
+    this.stats = new StatsPanel({ session: s, playTime: () => this.playTimeMs });
+    this.challenges = s.challengeList();
+    registerChallenges(this.challenges);
     setErrorHandler((id, e) => {
-      const c = this.welcome.challenges.find((x) => x.id === id);
+      const c = this.challenges.find((x) => x.id === id);
       this.hud.toast(`${c ? c.title : id}: the game's copy of this function threw "${e && e.message}". Using a safe fallback.`, 'bad', 7000);
     });
     this.challengeUI = new ChallengeUI({
-      net: this.net,
+      session: s,
       hud: this.hud,
       onApplied: () => {},
       onOpenChanged: (open, id) => {
         this.debugOpen = open ? id : null;
       },
     });
-    this.challengeUI.setChallenges(this.welcome.challenges);
+    this.challengeUI.setChallenges(this.challenges);
+
+    this.setProgress(s.progressView(), true);
+    this.missionView.setMissions(s.missionsView());
+    this.hud.setHealth(s.player.health);
+    this.updateScore();
 
     initInput(host);
-    onInput('tab', () => this.leaderboard.toggle());
-    onInput('escape', () => this.toggleMenu());
-    onInput('lock-lost', () => this.toggleMenu(true));
+    onInput('tab', () => this.stats.toggle());
+    onInput('escape', () => this.togglePause());
+    onInput('lock-lost', () => this.pause());
     onInput('lock', (locked) => {
-      this.hud.clickToPlay(!locked);
+      if (locked && !this.started) {
+        this.started = true;
+        document.getElementById('click-to-play').textContent = 'Click the game to look around · Esc pauses';
+      }
+      this.hud.clickToPlay(!locked && !this.paused);
       if (locked) unlockAudio();
     });
-    this.setupMenu();
-    this.bindNetwork();
-    window.addEventListener('beforeunload', () => this.challengeUI.saveDraftNow());
+    this.setupPauseMenu();
+    this.bindSession();
+    // Leaving or hiding the tab writes an autosave (IndexedDB usually finishes
+    // in time; the 60-second autosave covers the rest).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.autosave('hidden');
+    });
+    window.addEventListener('pagehide', () => this.autosave('leaving'));
+    this.hud.toast(s.clockMs > 0 ? `Game loaded. Play time ${formatTime(this.playTimeMs)}.` : 'New game. Find the glowing debugging station on the plaza and press E.', 'good', 6000);
   }
 
-  setupMenu() {
+  // --- Pause menu -------------------------------------------------------------
+
+  setupPauseMenu() {
     const $ = (id) => document.getElementById(id);
-    const sync = () => {
-      $('set-sens').value = settings.sensitivity;
-      $('sens-val').textContent = Number(settings.sensitivity).toFixed(1);
-      $('set-invert').checked = settings.invertY;
-      $('set-vol').value = settings.volume;
-      $('vol-val').textContent = `${Math.round(settings.volume * 100)}%`;
-      $('set-mute').checked = settings.muted;
-      $('set-gfx').value = settings.graphics;
-      $('set-light').value = settings.lighting;
-      $('set-fps').checked = settings.showFps;
-    };
-    sync();
-    $('set-sens').addEventListener('input', (e) => saveSettings({ sensitivity: Number(e.target.value) }));
-    $('set-invert').addEventListener('change', (e) => saveSettings({ invertY: e.target.checked }));
-    $('set-vol').addEventListener('input', (e) => saveSettings({ volume: Number(e.target.value) }));
-    $('set-mute').addEventListener('change', (e) => saveSettings({ muted: e.target.checked }));
-    $('set-gfx').addEventListener('change', (e) => {
-      saveSettings({ graphics: e.target.value });
-      this.hud.toast('Graphics setting saved. It applies fully after a page reload.', '', 5000);
+    $('btn-resume').addEventListener('click', () => this.resume());
+    $('btn-menu').addEventListener('click', () => this.pause());
+    $('btn-save').addEventListener('click', () => this.saveGame('manual', 'manual'));
+    $('btn-pause-settings').addEventListener('click', () => {
+      $('pause').hidden = true;
+      this.menus.openSettings(() => {
+        $('pause').hidden = false;
+      });
     });
-    $('set-light').addEventListener('change', (e) => saveSettings({ lighting: e.target.value }));
-    $('set-fps').addEventListener('change', (e) => saveSettings({ showFps: e.target.checked }));
-    onSettings(sync);
-    $('btn-resume').addEventListener('click', () => this.toggleMenu(false));
-    $('btn-menu').addEventListener('click', () => this.toggleMenu(true));
-    $('btn-leave').addEventListener('click', () => {
-      this.challengeUI.saveDraftNow();
-      this.net.leave();
-      location.reload();
+    $('btn-restart').addEventListener('click', async () => {
+      const ok = await confirmDialog('Restart from the beginning? Your current game is not saved first. Saved games stay until you save over them.', { ok: 'Restart', danger: true });
+      if (ok) this.menus.restart();
+    });
+    $('btn-exit').addEventListener('click', async () => {
+      const ok = await confirmDialog('Exit to the main menu? The game is autosaved first.', { ok: 'Save and exit' });
+      if (!ok) return;
+      await this.autosave('exit', { force: true });
+      this.menus.exitToMenu();
     });
   }
 
-  toggleMenu(force) {
-    const menu = document.getElementById('menu');
-    const show = force === undefined ? menu.hidden : force;
-    menu.hidden = !show;
-    if (show) releasePointer();
+  togglePause() {
+    if (this.paused) this.resume();
+    else this.pause();
   }
 
-  // --- Networking ---------------------------------------------------------
-
-  async join(options) {
-    const r = await this.net.join(options);
-    if (!r || !r.ok) throw new Error((r && r.error) || 'Could not join the room.');
-    this.applyJoin(r);
-    return r;
+  pause() {
+    if (this.paused || !this.running || !this.started) return;
+    this.paused = true;
+    releasePointer();
+    input.clear();
+    this.challengeUI.saveDraftNow();
+    this.stats.toggle(false);
+    document.getElementById('pause').hidden = false;
+    document.getElementById('pause-info').textContent = this.pauseInfo();
+    this.hud.clickToPlay(false);
+    sfx.setEngine(false);
   }
 
-  applyJoin(r) {
-    this.room = r.room;
-    this.hud.topBar({ name: r.you.name, room: r.room.isPublic ? r.room.modeName : r.room.code });
-    document.getElementById('menu-room').textContent = r.room.code;
-    document.getElementById('menu-mode').textContent = r.room.modeName;
-    document.getElementById('menu-pvp').textContent = r.room.pvp ? 'on' : 'off';
-    this.roundEndsAt = r.room.roundEndsAt;
-    this.setProgress(r.progress);
-    this.missionView.setMissions(r.missions);
-    for (const a of r.loadout) this.weapons.setAmmo(a);
-    this.weapons.equipped = r.you.equipped;
-    this.weapons.setOwned(r.progress.weapons);
-    this.setRoster(r.roster);
-    this.health = r.you.health;
-    this.alive = r.you.alive;
-    this.hud.setHealth(this.health);
-    if (!r.resumed || !this.positionKnown) {
-      this.player.teleport(r.you.pos);
-      this.positionKnown = true;
+  resume() {
+    if (!this.paused) return;
+    for (const id of ['pause', 'settings']) document.getElementById(id).hidden = true;
+    this.paused = false;
+    // The world waits for the first click into the game before it starts moving.
+    this.started = false;
+    input.clear();
+    requestPointer();
+    if (this.vehicles.driving) sfx.setEngine(true, 0);
+  }
+
+  pauseInfo() {
+    const st = this.session.statsView();
+    const saved = this.lastSavedAt ? `Last saved ${new Date(this.lastSavedAt).toLocaleTimeString()}` : 'Not saved yet this session';
+    return `Score ${st.totals.total.toLocaleString()} · Bugs ${st.bugsFixed}/${st.bugsTotal} · Chips ${st.chips}/${st.chipsTotal} · Play time ${formatTime(this.playTimeMs)} · ${saved}`;
+  }
+
+  // --- Saving -------------------------------------------------------------------
+
+  buildSaveNow(label) {
+    const s = this.session;
+    this.challengeUI.saveDraftNow();
+    s.vehiclePoses = this.vehicles.poses();
+    // In a car, save the spot beside it so loading does not put you inside it.
+    const p = s.player;
+    const keep = p.lastValidPos;
+    const d = this.vehicles.driving;
+    if (d && p.alive) p.lastValidPos = [d.v.pos.x + Math.cos(d.v.ry) * 2.2, Math.max(0, d.v.pos.y), d.v.pos.z - Math.sin(d.v.ry) * 2.2];
+    try {
+      return buildSave(s, { playTimeMs: this.playTimeMs, settings: savedSettings(), label });
+    } finally {
+      p.lastValidPos = keep;
     }
-    if (!r.you.vehicleId && this.vehicles.driving) this.vehicles.stopDriving();
-    for (const k of r.killFeed) this.hud.killFeed(k);
-    this.hud.toast(r.resumed ? 'Reconnected. Your state was restored.' : `Joined ${r.room.modeName}${r.room.isPublic ? '' : ` · room code ${r.room.code}`}`, 'good');
   }
 
-  setProgress(p) {
-    const firstTime = !this.progress;
+  /** slot: 'manual' | 'auto'. Returns true when the save was written. */
+  async saveGame(slot, reason) {
+    if (this.saving) await this.saving;
+    const manual = slot === 'manual';
+    const run = (async () => {
+      try {
+        const save = this.buildSaveNow(manual ? 'Saved game' : `Autosave (${reason})`);
+        await writeSave(slot, save);
+        this.lastSavedAt = save.savedAt;
+        this.sinceAutosave = 0;
+        this.hud.saveStatus(`${manual ? 'Saved' : 'Autosaved'} ${new Date(save.savedAt).toLocaleTimeString()}`);
+        if (manual) {
+          this.hud.toast('Game saved.', 'good');
+          sfx.click();
+          document.getElementById('pause-info').textContent = this.pauseInfo();
+        }
+        return true;
+      } catch (e) {
+        console.error(e);
+        this.hud.toast(`Could not save: ${e.message}`, 'bad', 7000);
+        this.hud.saveStatus('Save failed');
+        return false;
+      }
+    })();
+    this.saving = run;
+    const ok = await run;
+    this.saving = null;
+    return ok;
+  }
+
+  autosave(reason, { force = false } = {}) {
+    if (!this.running) return Promise.resolve(false);
+    if (!force && !this.session.player.alive) return Promise.resolve(false);
+    return this.saveGame('auto', reason);
+  }
+
+  scheduleAutosave(reason) {
+    clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => this.autosave(reason), 1500);
+  }
+
+  // --- Engine events ------------------------------------------------------------
+
+  setProgress(p, firstTime = false) {
     const prevWeapons = this.progress ? this.progress.weapons : null;
     const prevDistricts = this.progress ? this.progress.districts : null;
     this.progress = p;
@@ -189,12 +267,12 @@ export class Game {
     this.challengeUI.setProgress(p);
     this.missionView.setProgress(p);
     this.gates.setUnlocked(p.gates);
-    this.weapons.setOwned(p.weapons);
+    this.weapons.refresh();
     for (const st of STATIONS) {
-      const c = this.welcome.challenges.find((x) => x.id === st.challengeId);
+      const c = this.challenges.find((x) => x.id === st.challengeId);
       this.world.setStationState(st.challengeId, p.solved.includes(st.challengeId) ? 'solved' : p.districts.includes(c.district) ? 'open' : 'locked');
     }
-    this.hud.bottomBar({ bugs: `${p.solved.length}/${this.welcome.challenges.length}` });
+    this.hud.bottomBar({ bugs: `${p.solved.length}/${this.challenges.length}` });
     if (!firstTime) {
       for (const w of p.weapons) if (!prevWeapons.includes(w)) this.hud.popup(`${WEAPONS[w].name.toUpperCase()} UNLOCKED`, `Press ${WEAPONS[w].slot} to equip`, 'mission');
       for (const d of p.districts) if (!prevDistricts.includes(d)) {
@@ -205,79 +283,42 @@ export class Game {
     }
   }
 
-  setRoster(list) {
-    this.rosterById = new Map(list.map((r) => [r.id, r]));
-    this.leaderboard.setRoster(list);
-    const me = this.rosterById.get(this.welcome.id);
-    if (me) {
-      this.hud.bottomBar({ kills: me.kills, deaths: me.deaths });
-      this.avatar.root.userData.color = me.color;
-    }
-    for (const r of list) {
-      if (r.id === this.welcome.id) continue;
-      const rem = this.remotes.get(r.id);
-      if (rem && !rem.ch) this.attachCharacter(rem, r);
-    }
-    for (const [id, rem] of this.remotes) {
-      if (!this.rosterById.has(id)) this.removeRemote(id);
-      else if (rem.ch) rem.ch.root.visible = this.rosterById.get(id).connected;
-    }
+  updateScore() {
+    const st = this.session.statsView();
+    this.hud.topBar({ score: st.totals.total, chips: `${st.chips}/${st.chipsTotal}` });
+    this.hud.bottomBar({ kills: st.kills, deaths: st.deaths });
   }
 
-  attachCharacter(rem, info) {
-    rem.ch = createCharacter({ color: info.color, name: info.name, seed: info.id, shadows: false });
-    this.view.scene.add(rem.ch.root);
-  }
-
-  removeRemote(id) {
-    const rem = this.remotes.get(id);
-    if (!rem) return;
-    if (rem.ch) {
-      this.view.scene.remove(rem.ch.root);
-      rem.ch.dispose();
-    }
-    this.remotes.delete(id);
-  }
-
-  bindNetwork() {
-    const n = this.net;
-    n.on('s', (snap) => this.onSnapshot(snap));
-    n.on('correction', (m) => {
-      if (this.vehicles.driving) {
-        const v = this.vehicles.driving.v;
-        v.pos.set(...m.p);
-        this.physics.setCar(true, m.p[0], m.p[1], m.p[2]);
-        this.vehicles.driving.state.position = { x: m.p[0], y: m.p[1], z: m.p[2] };
-        this.vehicles.driving.state.speed = 0;
-      } else this.player.teleport(m.p);
-      if (m.reason === 'locked') this.hud.toast('That area is locked for you. Fix the district\'s gate bug first.', 'warn');
+  bindSession() {
+    const s = this.session;
+    s.on('ammo', () => this.weapons.refresh());
+    s.on('progress', (p) => this.setProgress(p));
+    s.on('missions', (m) => this.missionView.setMissions(m));
+    s.on('score', () => this.updateScore());
+    s.on('autosave', (why) => this.scheduleAutosave(why));
+    s.on('pickup', (e) => {
+      if (e.kind === 'chip') {
+        this.hud.popup('DATA CHIP', `+${e.points} · ${e.count} of ${e.total} collected`, 'bug');
+        sfx.success();
+      } else if (e.kind === 'medkit') {
+        this.hud.setHealth(e.health);
+        this.hud.toast(`Med kit: health ${e.health}.`, 'good');
+        sfx.click();
+      } else if (e.kind === 'ammo') {
+        this.hud.toast('Ammo crate: reserve ammo refilled.', 'good');
+        sfx.reload();
+      }
     });
-    n.on('respawn', (m) => {
-      if (this.vehicles.driving) this.vehicles.stopDriving();
-      this.player.teleport(m.p);
-      this.alive = true;
-      this.health = m.health || PLAYER.maxHealth;
-      this.hud.setHealth(this.health);
-      this.hud.hideDeath();
-      if (m.loadout) for (const a of m.loadout) this.weapons.setAmmo(a);
-      if (m.reason === 'fell') this.hud.toast('You fell out of the city. Respawned.', 'warn');
+    s.on('kill', (k) => {
+      this.hud.killFeed(k);
+      if (k.mine && k.points) this.hud.popup('GLITCH BOT DOWN', `+${k.points} COMBAT POINTS`, 'combat');
     });
-    n.on('ammo', (a) => this.weapons.setAmmo(a));
-    n.on('fire-rejected', (m) => {
-      if (m.ammo) this.weapons.setAmmo(m.ammo);
-      if (m.reason === 'debugging') this.hud.toast('Weapons are holstered while your safe-debugging shield is up.', 'warn');
+    s.on('enemy-shot', (e) => {
+      const from = new THREE.Vector3(...e.from);
+      this.effects.tracer(from, new THREE.Vector3(...e.to), '#ff6b6b', 0.1);
+      sfx.shot('pistol', from.distanceTo(this.view.camera.position));
     });
-    n.on('shot', (s) => {
-      if (s.id === this.welcome.id) return;
-      this.weapons.remoteShot(s, this.view.camera.position);
-    });
-    n.on('hit-confirm', (h) => {
-      this.hud.hitMarker(h.killed);
-      if (h.killed) sfx.kill();
-      else sfx.hit();
-    });
-    n.on('damaged', (d) => {
-      this.health = d.health;
+    s.on('damaged', (d) => {
       this.hud.setHealth(d.health);
       sfx.hurt();
       const me = this.player.position;
@@ -285,34 +326,20 @@ export class Game {
       const camYaw = Math.atan2(-Math.sin(this.camCtl.yaw), -Math.cos(this.camCtl.yaw));
       this.hud.damage(camYaw - angle);
     });
-    n.on('kill', (k) => {
-      this.hud.killFeed(k);
-      if (k.victim === this.welcome.id) {
-        this.alive = false;
-        this.health = 0;
-        this.hud.setHealth(0);
-        if (this.vehicles.driving) this.vehicles.stopDriving();
-        this.hud.showDeath(k.killer === k.victim ? 'You took yourself out.' : `Eliminated by ${k.killerName}`, performance.now() + PLAYER.respawnDelayMs);
-      }
-      if (k.killer === this.welcome.id && k.victim !== k.killer) {
-        if (k.points) this.hud.popup('ELIMINATION CONFIRMED', `+${k.points} COMBAT POINTS`, 'combat');
-        else if (k.farmed) this.hud.toast('No points: you already farmed this player recently.', 'warn');
-      }
+    s.on('player-down', (e) => {
+      this.hud.setHealth(0);
+      if (this.vehicles.driving) this.leaveCar();
+      this.hud.showDeath(e.by ? `Taken down by ${e.by}` : 'You went down.', () => Math.max(0, s.player.respawnAt - s.clockMs));
     });
-    n.on('progress', (p) => this.setProgress(p));
-    n.on('missions', (m) => this.missionView.setMissions(m));
-    n.on('score', (s) => {
-      this.hud.topBar({ score: s.totals.total, rank: s.rank });
+    s.on('respawn', (m) => {
+      if (this.vehicles.driving) this.leaveCar();
+      this.player.teleport(m.p);
+      this.hud.setHealth(m.health);
+      this.hud.hideDeath();
+      this.weapons.refresh();
+      if (m.reason === 'fell') this.hud.toast('You fell out of the city. Respawned.', 'warn');
     });
-    n.on('roster', (r) => this.setRoster(r));
-    n.on('player-joined', (p) => {
-      if (p.id !== this.welcome.id) this.hud.toast(`${p.name} joined`, '');
-    });
-    n.on('player-left', (p) => {
-      this.hud.toast(`${p.name} left`, '');
-      this.removeRemote(p.id);
-    });
-    n.on('mission', (e) => {
+    s.on('mission', (e) => {
       if (e.type === 'mission-complete') {
         this.hud.popup(`MISSION COMPLETE: ${e.title.toUpperCase()}`, e.reward ? `+${e.reward} MISSION POINTS` : 'Already rewarded', 'mission');
         sfx.mission();
@@ -329,62 +356,9 @@ export class Game {
         this.hud.toast(e.message, 'warn');
       }
     });
-    n.on('announce', (a) => this.hud.toast(a.text, 'good'));
-    n.on('round-end', (r) => {
-      this.hud.popup('ROUND OVER', r.winner ? `${r.winner.name} wins (+${r.reward})` : 'No winner this round', 'mission');
-    });
-    n.on('room-info', (info) => {
-      this.room = info;
-      this.roundEndsAt = info.roundEndsAt;
-    });
-    n.on('kicked', (k) => {
-      this.running = false;
-      document.getElementById('fatal-text').textContent = k.reason;
-      document.getElementById('fatal').hidden = false;
-    });
-    n.onLocal('net', (s) => this.hud.netStatus(s.connected));
-    n.onLocal('rejoined', (r) => {
-      if (r && r.ok) this.applyJoin(r);
-      else this.hud.toast('Could not rejoin the room after reconnecting.', 'bad');
-    });
   }
 
-  onSnapshot(snap) {
-    for (const e of snap.p) {
-      const [id, x, y, z, ry, pitch, flags, anim, weaponIdx, vehicleIdx, hp] = e;
-      if (id === this.welcome.id) {
-        this.shielded = !!(flags & 2);
-        this.spawnProtected = !!(flags & 4);
-        continue;
-      }
-      let rem = this.remotes.get(id);
-      if (!rem) {
-        rem = { id, state: new RemoteState(), ch: null };
-        this.remotes.set(id, rem);
-        const info = this.rosterById.get(id);
-        if (info) this.attachCharacter(rem, info);
-      }
-      rem.state.push(snap.t, x, y, z);
-      Object.assign(rem, { ry, pitch, flags, anim: ANIMS[anim] || 'idle', weapon: WEAPON_IDS[weaponIdx] || 'pistol', vehicleIdx, hp, lastSeen: performance.now() });
-    }
-    this.vehicles.applySnapshot(snap.v, this.welcome.id);
-  }
-
-  sendState(force = false) {
-    const now = performance.now();
-    if (!force && now - this.lastSend < 1000 / NET.clientSendHz) return;
-    this.lastSend = now;
-    if (!this.alive) return;
-    const d = this.vehicles.driving;
-    if (d) {
-      this.net.emit('state', { p: [d.v.pos.x, d.v.pos.y, d.v.pos.z], ry: d.v.ry, pitch: this.camCtl.pitch, anim: 'drive' });
-    } else {
-      const p = this.player.position;
-      this.net.emit('state', { p: [p.x, p.y, p.z], ry: this.player.ry, pitch: this.camCtl.pitch, anim: this.player.anim });
-    }
-  }
-
-  // --- Interactions ---------------------------------------------------------
+  // --- Interactions -------------------------------------------------------------
 
   nearestStation(pos) {
     let best = null;
@@ -410,21 +384,24 @@ export class Game {
     const driving = this.vehicles.driving;
     if (driving) {
       this.hud.prompt(`<kbd>E</kbd> Exit ${esc(driving.v.spec.name)}`);
-      if (input.consume('KeyE')) this.exitVehicle();
+      if (input.consume('KeyE')) this.leaveCar();
       return;
     }
-    if (!this.alive) {
+    if (!this.session.player.alive) {
       this.hud.prompt(null);
       return;
     }
     const st = this.nearestStation(pos);
     if (st) {
-      const c = this.welcome.challenges.find((x) => x.id === st.challengeId);
+      const c = this.challenges.find((x) => x.id === st.challengeId);
       const solved = this.progress.solved.includes(c.id);
       const demo = this.demos.describe(c.id);
       const isOpen = this.debugOpen === c.id;
       this.hud.prompt(`${isOpen ? 'Debugging' : `<kbd>E</kbd> ${solved ? 'Review' : 'Debug'}`} <b>${esc(c.title)}</b> (${c.reward} pts)${this.demos.hasDemo(c.id) ? ` · <kbd>F</kbd> ${esc(demo)}` : ` · <span class="muted">${esc(demo)}</span>`}`);
       if (input.consume('KeyE') && !isOpen) {
+        // Free the mouse for the debugger (this is not a pause: the safe-debugging shield covers you).
+        releasePointer();
+        input.clear();
         this.layout.showDebugger();
         this.challengeUI.open(c.id);
       }
@@ -434,7 +411,7 @@ export class Game {
     const gate = this.nearestGatePanel(pos);
     if (gate) {
       const open = this.progress.gates.includes(gate.id);
-      const c = this.welcome.challenges.find((x) => x.id === gate.requiresChallenge);
+      const c = this.challenges.find((x) => x.id === gate.requiresChallenge);
       if (gate.id === 'gate-downtown' && !open) {
         this.hud.prompt(`<kbd>E</kbd> Run gate test cycle · locked until <b>${esc(c.title)}</b> is fixed`);
         if (input.consume('KeyE')) this.demos.run('invisible-gate', this.progress);
@@ -446,22 +423,22 @@ export class Game {
     const npc = this.npcs.nearestMissionNpc(pos);
     if (npc) {
       this.hud.prompt(`<kbd>E</kbd> Talk to ${esc(npc.name)}`);
-      if (input.consume('KeyE')) this.net.request('talk', { npc: npc.id });
+      if (input.consume('KeyE')) this.session.talk(npc.id);
       return;
     }
     const v = this.vehicles.nearest(pos);
     if (v) {
       this.hud.prompt(`<kbd>E</kbd> Enter ${esc(v.spec.name)}`);
-      if (input.consume('KeyE')) this.enterVehicle(v);
+      if (input.consume('KeyE')) this.enterCar(v);
       return;
     }
     this.hud.prompt(null);
   }
 
-  async enterVehicle(v) {
-    const r = await this.net.request('vehicle:enter', { id: v.id });
-    if (!r || !r.ok) {
-      this.hud.toast(r && r.error ? r.error : 'Could not enter the car.', 'warn');
+  enterCar(v) {
+    const r = this.session.enterVehicle({ id: v.id, pos: [v.pos.x, v.pos.y, v.pos.z], driver: null });
+    if (!r.ok) {
+      this.hud.toast(r.error || 'Could not enter the car.', 'warn');
       sfx.empty();
       return;
     }
@@ -470,16 +447,16 @@ export class Game {
     sfx.door();
   }
 
-  async exitVehicle() {
+  leaveCar() {
     const v = this.vehicles.stopDriving();
+    this.session.exitVehicle();
     this.avatar.setVisible(true);
-    this.sendState(true);
-    const r = await this.net.request('vehicle:exit', {});
-    const out = r && r.ok && r.p ? r.p : [v.pos.x + Math.cos(v.ry) * 2.2, Math.max(0, v.pos.y), v.pos.z - Math.sin(v.ry) * 2.2];
-    this.player.teleport(out);
+    this.hud.vehicle(null);
+    if (!v) return;
+    this.player.teleport([v.pos.x + Math.cos(v.ry) * 2.2, Math.max(0, v.pos.y), v.pos.z - Math.sin(v.ry) * 2.2]);
   }
 
-  // --- Frame loop -------------------------------------------------------------
+  // --- Frame loop -------------------------------------------------------------------
 
   start() {
     this.running = true;
@@ -489,7 +466,7 @@ export class Game {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       try {
-        this.tick(dt, now);
+        this.tick(dt);
       } catch (e) {
         console.error(e);
       }
@@ -498,73 +475,104 @@ export class Game {
     requestAnimationFrame(frame);
   }
 
-  tick(dt, now) {
+  stop() {
+    this.running = false;
+  }
+
+  /** Move the simulation forward one frame (skipped while paused). */
+  simulate(dt) {
+    const s = this.session;
+    this.playTimeMs += dt * 1000;
     const [mx, my] = input.mouseDelta();
     if (input.locked) this.camCtl.look(mx, my);
-    this.camCtl.aiming = input.aimDown && this.alive && !this.vehicles.driving;
+    const alive = s.player.alive;
+    this.camCtl.aiming = input.aimDown && alive && !this.vehicles.driving;
 
-    let focus;
     const driving = this.vehicles.driving;
+    const focus = this.tmpFocus;
+    let speed = 0;
     if (driving) {
       const pose = this.vehicles.drive(dt);
-      focus = new THREE.Vector3(pose.x, pose.y, pose.z);
-      // Keep the hidden player body with the car.
-      this.physics.teleportPlayer(pose.x, -40, pose.z);
+      focus.set(pose.x, pose.y, pose.z);
+      speed = pose.speed;
+      this.physics.teleportPlayer(pose.x, -40, pose.z); // keep the hidden body with the car
     } else {
-      const p = this.player.update(dt, { frozen: !this.alive });
-      focus = new THREE.Vector3(p.x, p.y, p.z);
+      const p = this.player.update(dt, { frozen: !alive });
+      focus.set(p.x, p.y, p.z);
+      speed = this.player.speed;
     }
     this.gates.update(dt);
     this.physics.step(dt);
     this.vehicles.update(dt);
 
-    // Local avatar.
+    s.update(dt);
+    if (s.player.alive) {
+      const r = s.setPosition([focus.x, focus.y, focus.z], { ry: driving ? driving.v.ry : this.player.ry, speed });
+      if (r.correction) {
+        if (driving) {
+          const v = driving.v;
+          v.pos.set(...r.correction);
+          this.physics.setCar(true, r.correction[0], r.correction[1], r.correction[2]);
+          driving.state.position = { x: r.correction[0], y: r.correction[1], z: r.correction[2] };
+          driving.state.speed = 0;
+        } else this.player.teleport(r.correction);
+        focus.set(...r.correction);
+      }
+    }
+    this.hud.vehicle(this.vehicles.driving ? { name: this.vehicles.driving.v.spec.name, speed } : null);
+
+    const canFire = alive && !driving && input.locked && !s.isShielded();
+    this.weapons.update(dt, { playerPos: focus, canFire, boxes: this.enemyView.boxes() });
+    this.npcs.update(dt, focus);
+    this.demos.update();
+    this.interactions(focus);
+
+    this.sinceAutosave += dt * 1000;
+    if (this.sinceAutosave >= AUTOSAVE_EVERY_MS) {
+      this.sinceAutosave = 0;
+      this.autosave('timer');
+    }
+    return focus;
+  }
+
+  tick(dt) {
+    const s = this.session;
+    let focus;
+    const live = !this.paused && this.started;
+    if (live) focus = this.simulate(dt);
+    else {
+      input.mouseDelta();
+      const d = this.vehicles.driving;
+      focus = this.tmpFocus;
+      if (d) focus.copy(d.v.pos);
+      else {
+        const p = this.player.position;
+        focus.set(p.x, p.y, p.z);
+      }
+    }
+    const simDt = live ? dt : 0;
+    const driving = this.vehicles.driving;
+    const alive = s.player.alive;
+
     if (!driving) {
       this.avatar.root.position.copy(focus);
       this.avatar.root.rotation.y = this.player.ry;
       this.avatar.setAim(this.camCtl.pitch);
-      this.avatar.setWeapon(this.weapons.equipped);
-      this.avatar.animate(dt, this.alive ? this.player.anim : 'dead');
-      this.avatar.setShield(this.shielded || this.spawnProtected, this.shielded ? '#4fe3ff' : '#ffd23f');
+      this.avatar.setWeapon(s.player.equipped);
+      this.avatar.animate(simDt, alive ? this.player.anim : 'dead');
+      const shielded = s.isShielded();
+      const protectedNow = s.player.spawnProtectedUntil > s.clockMs;
+      this.avatar.setShield(shielded || protectedNow, shielded ? '#4fe3ff' : '#ffd23f');
+      this.hud.shield(shielded);
     }
-
-    // Remote players.
-    const renderTime = this.net.serverNow() - INTERP_DELAY;
-    const remoteBoxes = [];
-    const minimapPlayers = [];
-    for (const rem of this.remotes.values()) {
-      if (!rem.ch) continue;
-      const pos = rem.state.sample(renderTime);
-      if (!pos) continue;
-      const stale = performance.now() - (rem.lastSeen || 0) > 2000;
-      const inCar = rem.vehicleIdx >= 0;
-      rem.ch.root.visible = !inCar && !stale && this.rosterById.has(rem.id);
-      rem.ch.root.position.set(pos.x, pos.y, pos.z);
-      rem.ch.root.rotation.y = rem.ry;
-      rem.ch.setAim(rem.pitch);
-      rem.ch.setWeapon(rem.weapon);
-      rem.ch.animate(dt, rem.flags & 1 ? rem.anim : 'dead');
-      rem.ch.setShield(!!(rem.flags & 6), rem.flags & 2 ? '#4fe3ff' : '#ffd23f');
-      if (rem.ch.root.visible && rem.flags & 1) {
-        remoteBoxes.push(new THREE.Box3(new THREE.Vector3(pos.x - 0.45, pos.y, pos.z - 0.45), new THREE.Vector3(pos.x + 0.45, pos.y + 1.85, pos.z + 0.45)));
-      }
-      if (!stale) minimapPlayers.push({ x: pos.x, z: pos.z, color: rem.ch.root.visible ? '#ff4f5e' : '#888' });
-    }
-
-    this.lastRemoteBoxes = remoteBoxes;
-    const canFire = this.alive && !driving && input.locked && !(this.shielded) && document.getElementById('menu').hidden;
-    this.weapons.update(dt, { playerPos: focus, canFire, remoteBoxes });
     this.camCtl.update(dt, focus, { inVehicle: !!driving });
-    this.npcs.update(dt, focus);
-    this.demos.update();
-    this.interactions(focus);
-    this.sendState();
-
+    this.enemyView.update(simDt, s.enemiesView(), s.clockMs, this.view.camera.position);
+    this.pickupView.update(simDt, s.pickupsView());
+    this.effects.update(simDt);
     const target = this.missionView.update(focus);
-    this.world.update(dt);
-    this.view.update(dt, focus);
+    this.world.update(simDt);
+    this.view.update(simDt, focus);
 
-    // District banner.
     const di = districtIndexAt(focus.x);
     if (di !== this.lastDistrict) {
       if (this.lastDistrict !== -1) this.hud.toast(`Entering ${DISTRICTS[di].name}`, '');
@@ -576,22 +584,20 @@ export class Game {
       this.hud.toast('You walked straight through the Sunset Hotel wall. That is the Ghost Wall bug: debug it at the station on the plaza.', 'warn', 7000);
     }
     if (!this.player.inHotel) this.hotelWarned = false;
-
-    this.hud.shield(this.shielded);
-    this.hud.crosshair({ visible: !driving && this.alive, aiming: this.camCtl.aiming });
-    if (this.roundEndsAt) this.hud.bottomBar({ roundLeft: this.roundEndsAt - this.net.serverNow() });
-    else this.hud.bottomBar({ roundLeft: null });
+    this.hud.crosshair({ visible: !driving && alive && !this.paused, aiming: this.camCtl.aiming });
+    this.hud.topBar({ playTime: this.playTimeMs });
+    if (this.stats.open && (this.frameCount = (this.frameCount || 0) + 1) % 30 === 0) this.stats.render();
 
     this.frameMinimap = (this.frameMinimap || 0) + 1;
     if (this.frameMinimap % 3 === 0) {
-      const stationStates = Object.fromEntries(STATIONS.map((s) => {
-        const c = this.welcome.challenges.find((x) => x.id === s.challengeId);
-        return [s.challengeId, this.progress.solved.includes(s.challengeId) ? 'solved' : this.progress.districts.includes(c.district) ? 'open' : 'locked'];
+      const stationStates = Object.fromEntries(STATIONS.map((st) => {
+        const c = this.challenges.find((x) => x.id === st.challengeId);
+        return [st.challengeId, this.progress.solved.includes(st.challengeId) ? 'solved' : this.progress.districts.includes(c.district) ? 'open' : 'locked'];
       }));
       this.minimap.draw({
         me: focus,
         yaw: this.camCtl.yaw,
-        players: minimapPlayers,
+        players: [...this.pickupView.minimapDots(s.pickupsView()), ...this.enemyView.minimapDots()],
         vehicles: this.vehicles.vehicles.map((v) => ({ x: v.pos.x, z: v.pos.z, color: VEHICLE_SPAWNS[v.index].color })),
         gatesOpen: this.progress.gates,
         stationStates,
@@ -605,9 +611,12 @@ export class Game {
     this.frames++;
     this.fpsTime += dt;
     if (this.fpsTime >= 0.5) {
-      this.hud.fps(settings.showFps ? `${Math.round(this.frames / this.fpsTime)} FPS · ${this.view.renderer.info.render.calls} draws` : null);
+      const info = this.view.renderer.info;
+      this.hud.fps(settings.showFps ? `${Math.round(this.frames / this.fpsTime)} FPS · ${info.render.calls} draws · ${info.memory.geometries} geometries` : null);
+      this.lastFps = Math.round(this.frames / this.fpsTime);
       this.frames = 0;
       this.fpsTime = 0;
     }
   }
 }
+

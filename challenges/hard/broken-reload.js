@@ -9,7 +9,7 @@ export default {
   summary: 'Reloading at the armory bench never finishes.',
   description:
     'The Vice Port armory bench runs a training weapon through updateReload(). The reload bar never completes, and the logic also invents ammunition that is not in reserve. ' +
-    'This only affects the training weapon: real weapon reloads are always handled by the server. Fixing it unlocks the Shotgun.',
+    'This only affects the training weapon: real weapon reloads are always handled by the game engine. Fixing it unlocks the Shotgun.',
   reproduce: [
     'Go to the Armory Reload Bench in Vice Port.',
     'Press E to run a reload drill on the training weapon.',

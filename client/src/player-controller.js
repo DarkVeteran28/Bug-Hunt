@@ -3,8 +3,8 @@
 // checked with the ghost-wall challenge function instead of the physics
 // engine, so fixing that challenge is what makes the hotel solid.
 import * as THREE from 'three';
-import { PLAYER } from '/shared/config.js';
-import { GHOST_HOTEL } from '/shared/world-data.js';
+import { PLAYER } from '../../shared/config.js';
+import { GHOST_HOTEL } from '../../shared/world-data.js';
 import { input } from './input.js';
 import { call } from './challenge-runtime.js';
 import { sfx } from './audio.js';

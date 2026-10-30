@@ -1,5 +1,5 @@
 // Deterministic, original city layout shared by the client (rendering and
-// physics) and the server (line-of-sight, movement and interaction checks).
+// physics) and the game engine (line-of-sight, movement and interaction checks).
 // Everything here is plain data built from a seeded RNG, so both sides agree.
 
 export const DISTRICT_WIDTH = 180;
@@ -244,7 +244,7 @@ export const STATIONS = Object.freeze([
   // Downtown
   { challengeId: 'broken-mission', pos: local(1, -30, -55), label: 'Courier Dispatch Terminal' },
   { challengeId: 'teleporting-npc', pos: local(1, -48, -40), label: 'Pedestrian Routing Box' },
-  { challengeId: 'frozen-player', pos: local(1, -12, -40), label: 'Netcode Relay' },
+  { challengeId: 'frozen-player', pos: local(1, -12, -40), label: 'Bot Tracking Relay' },
   // Vice Port
   { challengeId: 'flying-car', pos: local(2, 20, -55), label: 'Vehicle Physics Rig' },
   { challengeId: 'broken-reload', pos: local(2, 44, -40), label: 'Armory Reload Bench' },
@@ -364,7 +364,7 @@ export function getWorld() {
   return cached;
 }
 
-// --- Geometry helpers shared by client and server -------------------------
+// --- Geometry helpers shared by the page and the engine -------------------------
 
 // Ray vs axis-aligned box (slab method). Returns distance or Infinity.
 export function rayAabb(origin, dir, min, max, maxDist = Infinity) {

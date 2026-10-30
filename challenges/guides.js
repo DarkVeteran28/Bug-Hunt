@@ -1,7 +1,7 @@
 // Easy-mode guidance: plain-language explanations of each seeded bug, and the
 // exact text on each buggy line so the editor can highlight it. These are
 // shown to players who turn on Easy mode; the reference solutions stay on the
-// server until a player explicitly asks for one (which halves the reward).
+// game engine until a player explicitly asks for one (which halves the reward).
 export const GUIDES = Object.freeze({
   'ghost-wall': [
     { find: 'a.min.x <= b.min.x', say: 'This checks whether box b fits completely inside box a. You want to know whether they touch at all. On each axis that is: a.min < b.max && a.max > b.min.' },

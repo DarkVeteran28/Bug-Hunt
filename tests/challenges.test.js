@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CHALLENGE_LIST, CHALLENGES, publicChallenge } from '../challenges/index.js';
 import { STATIONS, DISTRICTS } from '../shared/world-data.js';
-import { runSubmission } from '../server/sandbox-runner.js';
+import { runTests } from '../engine/challenge-tests.js';
+
+const runSubmission = async (c, code) => runTests({ code, entry: c.entry, tests: c.tests });
 
 test('there are at least twelve distinct challenges', () => {
   assert.ok(CHALLENGE_LIST.length >= 12);

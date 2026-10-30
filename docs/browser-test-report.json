@@ -1,0 +1,500 @@
+{
+  "when": "2026-10-30T10:26:16.899Z",
+  "target": "source",
+  "results": [
+    {
+      "n": 1,
+      "title": "The game loads",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "main menu is shown",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "page title",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 2,
+      "title": "The main menu works",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "Continue is disabled when there is no save",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "menu says there is no save yet",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Controls opens",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Settings opens",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "graphics quality has High, Medium and Low",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "settings are stored",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Back returns to the main menu",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 3,
+      "title": "New Game starts correctly",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "player starts at the Ocean Drive spawn",
+          "detail": "[30,0,-40]"
+        },
+        {
+          "ok": true,
+          "msg": "health 100, score 0, no bugs fixed, no chips",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "only Ocean Drive and the pistol are unlocked",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "15 glitch bots are in the city",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "\"Click the game to start\" is shown and the world waits",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the game clock does not run before the first click",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the game clock runs once playing",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 4,
+      "title": "Movement works",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "W walks forward",
+          "detail": "5.0 m/s (walk speed 5)"
+        },
+        {
+          "ok": true,
+          "msg": "Shift sprints",
+          "detail": "8.5 m/s (sprint speed 8.5)"
+        },
+        {
+          "ok": true,
+          "msg": "Space jumps",
+          "detail": "peak 1.14 m"
+        },
+        {
+          "ok": true,
+          "msg": "gravity brings the player back down",
+          "detail": "0.05 m, on the ground"
+        },
+        {
+          "ok": true,
+          "msg": "the game engine tracks the player position",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 5,
+      "title": "The camera works",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "mouse movement turns the camera",
+          "detail": "yaw 3.14 → 2.39"
+        },
+        {
+          "ok": true,
+          "msg": "the camera follows behind the player",
+          "detail": "1.6 m away"
+        },
+        {
+          "ok": true,
+          "msg": "the camera tilts up and down",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 6,
+      "title": "Collision works",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "walking into a building stops at its wall",
+          "detail": "wall at z=-0.0, player at z=-0.47"
+        },
+        {
+          "ok": true,
+          "msg": "the player did reach the wall",
+          "detail": "0.45 m short"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 7,
+      "title": "NPCs and interactions work",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "pedestrians walk their routes",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "an infinite loop in player code is stopped and reported; the game keeps running",
+          "detail": "1592 ms"
+        },
+        {
+          "ok": true,
+          "msg": "fixing Ghost Wall in the debugger pays 100 points",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "before the Broken Car fix the car door is jammed",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "after the fix, E enters the car",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the car drives",
+          "detail": "13.6 m"
+        },
+        {
+          "ok": true,
+          "msg": "the HUD shows vehicle info while driving",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "E leaves the car",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "pressing E next to Rico starts the courier mission",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "glitch bots patrol",
+          "detail": "7.4 m in 30 frames"
+        },
+        {
+          "ok": true,
+          "msg": "a bot that sees the player shoots at them",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the player can stop a bot and earns combat points",
+          "detail": "3 shots"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 8,
+      "title": "Missions can be completed",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "walking to the end of the pier completes \"Welcome to Vice\"",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the mission pays 150 points",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "walking over a data chip collects it",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Tab shows inventory and stats",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 9,
+      "title": "Pause and resume work",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "Esc opens the pause menu",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "pause menu has Resume, Save Game, Restart, Settings, Exit to Main Menu",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "while paused the game clock, play time and pedestrians stand still",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Resume closes the menu",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the game runs again after Resume",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 10,
+      "title": "Save and load work",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "Save Game writes the save",
+          "detail": "score 675"
+        },
+        {
+          "ok": true,
+          "msg": "the save is in IndexedDB and passes its checks",
+          "detail": "[[\"manual\",true],[\"auto\",true],[\"auto-backup\",true]]"
+        },
+        {
+          "ok": true,
+          "msg": "after a reload, Continue shows the saved game",
+          "detail": "Saved game · 10/30/2026, 10:24:09 AM · score 675 · 3/12 bugs · play time 0:44"
+        },
+        {
+          "ok": true,
+          "msg": "Load Game lists the saves",
+          "detail": "3 loadable"
+        },
+        {
+          "ok": true,
+          "msg": "score and fixed bugs are restored",
+          "detail": "675 points, 3 bugs"
+        },
+        {
+          "ok": true,
+          "msg": "chips, missions and the courier step are restored",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "position is restored",
+          "detail": "[-29.96,0.05,-70.03]"
+        },
+        {
+          "ok": true,
+          "msg": "unlocked gates are open again",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the debugger shows the fixes",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "play time carries over",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "a damaged save is reported on the menu",
+          "detail": "One save is damaged and will not be loaded (Saved game: The save is damaged (not valid JSO"
+        },
+        {
+          "ok": true,
+          "msg": "Continue still offers the newest intact save",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Continue loads the intact save",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 11,
+      "title": "Restart works",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "Restart asks first",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "Restart returns to the starting state",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "saved games are kept after Restart",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 12,
+      "title": "No multiplayer errors or network dependencies remain",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "no WebSocket connections were opened",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "every request stayed on the static site (no CDN, no API)",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "no networking globals on the page",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 13,
+      "title": "The game works after a refresh",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "after a refresh the autosave is offered",
+          "detail": "Autosave · 10/30/2026, 10:24:27 AM · score 100 · 1/12 bugs · play time 0:01"
+        },
+        {
+          "ok": true,
+          "msg": "the fix made just before the refresh is still there",
+          "detail": ""
+        },
+        {
+          "ok": true,
+          "msg": "the game runs after the refresh",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    {
+      "n": 14,
+      "title": "No major console errors or memory leaks",
+      "checks": [
+        {
+          "ok": true,
+          "msg": "firing adds no objects to the scene (pooled effects)",
+          "detail": "1046 → 1046"
+        },
+        {
+          "ok": true,
+          "msg": "after warm-up, firing hundreds more shots creates no new GPU buffers",
+          "detail": "geometries 248 → 250, textures 14 → 14"
+        },
+        {
+          "ok": true,
+          "msg": "JavaScript heap stays flat",
+          "detail": "24.7 → 24.8 MB after garbage collection"
+        },
+        {
+          "ok": true,
+          "msg": "no console errors or uncaught exceptions during the whole run",
+          "detail": ""
+        }
+      ],
+      "ok": true
+    }
+  ],
+  "notes": {
+    "loadSeconds": 3.079,
+    "pointerLockInHeadless": true,
+    "combat": {
+      "moved": 7.367360000000225,
+      "shotAt": 1,
+      "shots": 3,
+      "killed": true,
+      "kills": 1,
+      "combat": 50,
+      "health": 100
+    },
+    "memory": {
+      "before": {
+        "heap": 24.666568756103516,
+        "gpu": {
+          "geometries": 248,
+          "textures": 14
+        }
+      },
+      "after": {
+        "heap": 24.761795043945312,
+        "gpu": {
+          "geometries": 250,
+          "textures": 14
+        }
+      }
+    },
+    "fps": 22
+  },
+  "errors": []
+}

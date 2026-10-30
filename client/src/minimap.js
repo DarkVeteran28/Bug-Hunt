@@ -1,6 +1,6 @@
 // Minimap: a pre-rendered top-down city image, cropped around the player,
 // with gates, stations, mission targets, vehicles and players drawn on top.
-import { getWorld, WORLD, AVENUES_Z, CROSS_LOCAL_X, ROAD_HALF, DISTRICTS, districtCenterX, STATIONS } from '/shared/world-data.js';
+import { getWorld, WORLD, AVENUES_Z, CROSS_LOCAL_X, ROAD_HALF, DISTRICTS, districtCenterX, STATIONS } from '../../shared/world-data.js';
 
 const SCALE = 1.2; // pixels per world unit on the base image
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Progress } from '../server/progression.js';
+import { Progress } from '../engine/progression.js';
 import { getWorld, districtCenterX } from '../shared/world-data.js';
 
 test('only Ocean Drive is unlocked at the start', () => {

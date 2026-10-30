@@ -1,27 +1,24 @@
 {
   "name": "vice-city-bug-hunt-3d",
   "version": "0.1.0",
-  "description": "Browser 3D multiplayer open-world game where you fix real JavaScript bugs to progress.",
+  "description": "Single-player browser 3D open-world game where you fix real JavaScript bugs to progress. Runs entirely in the browser; deploys as a static site.",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
+    "dev": "node scripts/serve.js",
+    "build": "node scripts/build.js",
+    "start": "node scripts/serve.js --dist",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
-    "test:browser": "node scripts/browser-smoke.js && node scripts/browser-easy-mode.js"
+    "test:browser": "node scripts/browser-test.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.18.2",
-    "better-sqlite3": "12.4.1",
-    "express": "5.1.0",
     "monaco-editor": "0.52.2",
-    "socket.io": "4.8.1",
-    "socket.io-client": "4.8.1",
     "three": "0.180.0"
   },
   "type": "module",
   "engines": {
-    "node": "22.x"
+    "node": ">=20"
   },
   "private": true
 }

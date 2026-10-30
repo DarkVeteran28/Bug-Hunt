@@ -1,23 +1,23 @@
 export default {
   id: 'frozen-player',
-  title: 'Frozen Player',
+  title: 'Frozen Bots',
   difficulty: 'medium',
   district: 'downtown',
   mandatory: false,
   entry: 'interpolateRemote',
-  summary: 'Other players stutter and freeze instead of moving smoothly.',
+  summary: 'Glitch bots stutter and freeze instead of moving smoothly.',
   description:
-    'Remote players are drawn by interpolating between position snapshots from the server. The helper below only ever returns the older snapshot, and when snapshots run late it shows the oldest one. ' +
-    'Fix interpolateRemote(). Your verified version then renders every other player in your game.',
+    'Glitch bots are drawn by interpolating between position reports from the city tracking relay (10 reports a second). The helper below only ever returns the older snapshot, and when snapshots run late it shows the oldest one. ' +
+    'Fix interpolateRemote(). Your verified version then draws every glitch bot in your game.',
   reproduce: [
-    'Play with a second player (open the game in another tab and join the same room).',
-    'Watch them move: they jump in steps and sometimes freeze in place.',
+    'Find a red glitch bot patrolling a street (there are two in Ocean Beach).',
+    'Watch it move: it jumps in steps and sometimes freezes in place.',
   ],
   hints: [
     'Math.floor(alpha) is 0 for every alpha below 1, so lerp never leaves a.',
     'When renderTime is newer than every snapshot, show the newest snapshot, not the oldest.',
   ],
-  consequence: 'Other players move smoothly on your screen, rendered by your function.',
+  consequence: 'Glitch bots move smoothly on your screen, drawn by your function.',
   starterCode: `// buffer:     array of snapshots { t, x, y, z }, sorted by t (milliseconds), oldest first
 // renderTime: the time (ms) we want to draw the player at
 // Returns { x, y, z } for that time, or null when the buffer is empty.

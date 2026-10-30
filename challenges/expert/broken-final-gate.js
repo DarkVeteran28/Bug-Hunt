@@ -8,7 +8,7 @@ export default {
   summary: 'The Final Vault stays locked.',
   description:
     'The Final Vault controller decides whether you have earned entry with canOpenFinalGate(). Its progression checks are wrong in several places, so it reports nonsense and refuses honest players. ' +
-    'Fix it. The server then evaluates the approved rule against your server-side progress and opens the vault for you.',
+    'Fix it. The game then evaluates the approved rule against your saved progress and opens the vault for you.',
   reproduce: [
     'Go to the Final Vault Controller in the Industrial Zone plaza.',
     'Press E to ask the controller what is missing.',

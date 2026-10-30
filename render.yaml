@@ -1,0 +1,7 @@
+# Render Blueprint: the game is a static site (no server process).
+services:
+  - type: web
+    name: vice-city-bug-hunt-3d
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist

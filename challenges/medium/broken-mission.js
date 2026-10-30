@@ -8,7 +8,7 @@ export default {
   summary: 'The courier mission never completes.',
   description:
     'The "Special Delivery" mission uses a small state machine. Rico hands you a package, but when you reach Vera the mission stays stuck in "delivering". ' +
-    'Fix nextMissionState(). The server then uses the approved state machine for your courier mission, and Vice Port unlocks.',
+    'Fix nextMissionState(). The game then uses the approved state machine for your courier mission, and Vice Port unlocks.',
   reproduce: [
     'In Downtown, walk to Rico (yellow) and press E to accept the package.',
     'Walk to Vera (pink) and press E to deliver it.',

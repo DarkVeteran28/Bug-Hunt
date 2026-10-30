@@ -8,7 +8,7 @@ export default {
   summary: 'Nobody can get into a car.',
   description:
     'Pressing E next to a car should put you in the driver seat, but canEnterVehicle() refuses every request. ' +
-    'Fix the condition. Once verified, the server switches to the approved vehicle-entry rule for you and you can drive.',
+    'Fix the condition. Once verified, the game switches to the approved vehicle-entry rule for you and you can drive.',
   reproduce: [
     'Walk up to the pink Sunrise Coupe parked on Ocean Drive.',
     'Press E next to the driver door.',
