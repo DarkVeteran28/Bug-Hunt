@@ -29,6 +29,79 @@ export class ChallengeUI {
     $('btn-reset').addEventListener('click', () => this.resetCode());
     $('btn-hint').addEventListener('click', () => this.hint());
     $('btn-close-challenge').addEventListener('click', () => this.close());
+    $('btn-solution').addEventListener('click', () => this.showSolution());
+
+    // Easy mode is on unless the player turned it off.
+    this.easy = true;
+    try {
+      this.easy = localStorage.getItem('vc-easy-mode') !== '0';
+    } catch {
+      /* storage unavailable */
+    }
+    this.solutionRevealed = false;
+    const box = $('easy-mode');
+    box.checked = this.easy;
+    box.addEventListener('change', () => {
+      this.easy = box.checked;
+      try {
+        localStorage.setItem('vc-easy-mode', this.easy ? '1' : '0');
+      } catch {
+        /* storage unavailable */
+      }
+      box.blur();
+      this.renderGuide();
+      this.renderStatus();
+    });
+  }
+
+  /** Easy mode: list each bug in plain words and highlight its line. */
+  renderGuide() {
+    const box = $('ch-guide');
+    const guide = this.current && this.current.guide;
+    if (!this.easy || !guide || !guide.length || this.progress.solved.includes(this.current.id)) {
+      box.hidden = true;
+      this.editor.markLines([]);
+      return;
+    }
+    const code = this.editor.getValue();
+    const notes = guide.map((g) => {
+      const i = code.indexOf(g.find);
+      return { ...g, line: i < 0 ? null : code.slice(0, i).split('\n').length };
+    });
+    this.editor.markLines(notes.filter((n) => n.line).map((n) => ({ line: n.line, message: n.say })));
+    const left = notes.filter((n) => n.line).length;
+    box.hidden = false;
+    box.innerHTML = `<div class="g-title">🔎 What's wrong (${notes.length} ${notes.length === 1 ? 'problem' : 'problems'}, highlighted in yellow)</div><ol>${notes.map((n, k) =>
+      `<li data-k="${k}" class="${n.line ? '' : 'done'}"><span class="g-line">${n.line ? `Line ${n.line}` : 'Edited'}</span>: ${esc(n.say)}</li>`).join('')}</ol>` +
+      `<div class="g-foot">${left ? 'Click a note to jump to its line. Fix every highlighted line, then press Run Tests.' : 'You changed every highlighted line. Press Run Tests to check your fix.'}` +
+      `${this.solutionRevealed ? '' : ` Stuck? <b>Show Fix</b> fills in the answer for ${this.current.assistedReward} points instead of ${this.current.reward}.`}</div>`;
+    box.querySelectorAll('li').forEach((li) => li.addEventListener('click', () => {
+      const n = notes[Number(li.dataset.k)];
+      if (n.line) this.editor.revealLine(n.line);
+    }));
+  }
+
+  async showSolution() {
+    if (!this.current || this.busy) return;
+    const c = this.current;
+    if (!this.solutionRevealed && !window.confirm(`Put the working fix in the editor? You will get ${c.assistedReward} points for this bug instead of ${c.reward}.`)) return;
+    const r = await this.net.request('challenge:solution', { id: c.id });
+    if (!r || !r.ok) {
+      this.hud.toast(r && r.error ? r.error : 'Could not load the fix.', 'warn');
+      return;
+    }
+    if (!this.current || this.current.id !== c.id) return;
+    this.solutionRevealed = true;
+    this.editor.setValue(r.code);
+    this.saveDraftNow();
+    this.renderMeta();
+    this.hud.toast('The fix is in the editor. Read the changes, then press Run Tests and Apply Fix.', 'good', 6000);
+  }
+
+  renderMeta() {
+    const c = this.current;
+    const reward = this.solutionRevealed ? `<b>${c.assistedReward}</b> points (fix shown, full reward ${c.reward})` : `<b>${c.reward}</b> points`;
+    $('ch-meta').innerHTML = `<span class="diff ${c.difficulty}">${c.difficulty}</span> <span>Reward: ${reward}</span> <span>${esc(districtName(c.district))}</span>${c.mandatory ? ' <span class="diff expert">mandatory gate</span>' : ''}${c.unlocksWeapon ? ` <span>Unlocks: ${esc(c.unlocksWeapon.toUpperCase())}</span>` : ''}`;
   }
 
   setChallenges(list) {
@@ -70,13 +143,15 @@ export class ChallengeUI {
     $('bug-board').hidden = true;
     $('challenge').hidden = false;
     $('ch-title').textContent = r.challenge.title;
-    $('ch-meta').innerHTML = `<span class="diff ${r.challenge.difficulty}">${r.challenge.difficulty}</span> <span>Reward: <b>${r.challenge.reward}</b> points</span> <span>${esc(districtName(r.challenge.district))}</span>${r.challenge.mandatory ? ' <span class="diff expert">mandatory gate</span>' : ''}${r.challenge.unlocksWeapon ? ` <span>Unlocks: ${esc(r.challenge.unlocksWeapon.toUpperCase())}</span>` : ''}`;
+    this.solutionRevealed = !!r.solutionRevealed;
+    this.renderMeta();
     $('ch-desc').textContent = r.challenge.description;
     $('ch-repro').innerHTML = r.challenge.reproduce.map((s) => `<li>${esc(s)}</li>`).join('');
     $('ch-consequence').textContent = `When fixed: ${r.challenge.consequence}`;
     const code = this.drafts.get(id) ?? r.solvedCode ?? r.draft ?? r.challenge.starterCode;
     this.editor.setValue(code);
     this.renderHints(r.hints, r.challenge.hintCount);
+    this.renderGuide();
     $('ch-output').innerHTML = `<div class="muted">Tests: ${r.challenge.testNames.length}. Edit the function, then press Run Tests. Your draft is saved as you type.</div>`;
     this.renderStatus();
     this.onOpenChanged(true, id);
@@ -90,6 +165,8 @@ export class ChallengeUI {
     const verified = !solved && this.verifiedCode !== null && this.verifiedCode === this.editor.getValue();
     $('btn-apply').disabled = !verified || this.busy;
     $('btn-run').disabled = this.busy;
+    $('btn-solution').hidden = !this.easy || solved;
+    $('btn-solution').disabled = this.busy;
     const s = $('ch-status');
     if (solved) s.innerHTML = '<span style="color:var(--green)">✔ Fixed. You can keep experimenting; rewards are paid once.</span>';
     else if (verified) s.innerHTML = '<span style="color:var(--green)">All tests pass. Apply the fix!</span>';
@@ -107,6 +184,8 @@ export class ChallengeUI {
     this.drafts.set(this.current.id, code);
     clearTimeout(this.draftTimer);
     this.draftTimer = setTimeout(() => this.saveDraftNow(), 1200);
+    clearTimeout(this.guideTimer);
+    this.guideTimer = setTimeout(() => this.renderGuide(), 250);
     this.renderStatus();
   }
 
@@ -151,6 +230,7 @@ export class ChallengeUI {
         html += '</div>';
       }
     }
+    if (!rep.passed && this.easy) html += '<div class="muted" style="margin-top:6px">Tip: compare "expected" with "received" above, and check the highlighted lines.</div>';
     if (rep.logs && rep.logs.length) html += `<div class="logs">console:\n${esc(rep.logs.join('\n'))}</div>`;
     $('ch-output').innerHTML = html;
     if (rep.passed) {
@@ -174,12 +254,13 @@ export class ChallengeUI {
     }
     this.verifiedCode = null;
     if (r.awarded) {
-      this.hud.popup(`BUG FIXED: ${r.title.toUpperCase()}`, `+${r.awarded} BUG POINTS`, 'bug');
+      this.hud.popup(`BUG FIXED: ${r.title.toUpperCase()}`, `+${r.awarded} BUG POINTS${r.assisted ? ' (FIX SHOWN)' : ''}`, 'bug');
       sfx.success();
       this.hud.toast(r.consequence, 'good', 7000);
     }
     this.onApplied(id, r);
     this.renderStatus();
+    this.renderGuide();
   }
 
   resetCode() {
@@ -202,6 +283,7 @@ export class ChallengeUI {
     this.net.emit('challenge:close', {});
     this.current = null;
     this.verifiedCode = null;
+    this.editor.markLines([]);
     $('challenge').hidden = true;
     $('bug-board').hidden = false;
     this.onOpenChanged(false, null);

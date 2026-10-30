@@ -92,6 +92,17 @@ export function openDatabase(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file);
   db.exec(SCHEMA);
+  // Columns added after the first release; ignore the error if they exist.
+  for (const sql of [
+    'ALTER TABLE challenge_progress ADD COLUMN solution_revealed INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE challenge_completions ADD COLUMN assisted INTEGER NOT NULL DEFAULT 0',
+  ]) {
+    try {
+      db.exec(sql);
+    } catch {
+      /* column already exists */
+    }
+  }
   return createRepo(db);
 }
 
@@ -120,11 +131,12 @@ function createRepo(db) {
     openProgress: db.prepare('INSERT OR IGNORE INTO challenge_progress (player_id, challenge_id, first_opened_at) VALUES (?, ?, ?)'),
     saveDraft: db.prepare('UPDATE challenge_progress SET draft = ?, draft_updated_at = ? WHERE player_id = ? AND challenge_id = ?'),
     revealHint: db.prepare('UPDATE challenge_progress SET hints_revealed = hints_revealed + 1 WHERE player_id = ? AND challenge_id = ? AND hints_revealed < ?'),
+    revealSolution: db.prepare('UPDATE challenge_progress SET solution_revealed = 1 WHERE player_id = ? AND challenge_id = ?'),
     setVerified: db.prepare('UPDATE challenge_progress SET verified_code = ?, verified_at = ? WHERE player_id = ? AND challenge_id = ?'),
     insertAttempt: db.prepare('INSERT INTO challenge_attempts (player_id, challenge_id, passed, passed_tests, total_tests, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
     attemptStats: db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(passed), 0) AS passed FROM challenge_attempts WHERE player_id = ?'),
-    insertCompletion: db.prepare('INSERT OR IGNORE INTO challenge_completions (player_id, challenge_id, points, solve_ms, code, completed_at) VALUES (?, ?, ?, ?, ?, ?)'),
-    completions: db.prepare('SELECT challenge_id, points, solve_ms, code, completed_at FROM challenge_completions WHERE player_id = ?'),
+    insertCompletion: db.prepare('INSERT OR IGNORE INTO challenge_completions (player_id, challenge_id, points, solve_ms, code, completed_at, assisted) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+    completions: db.prepare('SELECT challenge_id, points, solve_ms, code, completed_at, assisted FROM challenge_completions WHERE player_id = ?'),
     insertMission: db.prepare('INSERT OR IGNORE INTO mission_completions (player_id, mission_id, completed_at) VALUES (?, ?, ?)'),
     missions: db.prepare('SELECT mission_id FROM mission_completions WHERE player_id = ?'),
   };
@@ -137,7 +149,7 @@ function createRepo(db) {
     combat: `SELECT p.id, p.name, COALESCE(SUM(s.amount), 0) AS value FROM players p LEFT JOIN score_events s ON s.player_id = p.id AND s.kind = 'combat' GROUP BY p.id ORDER BY value DESC, p.id ASC LIMIT ?`,
     kd: `SELECT p.id, p.name, st.kills, st.deaths, ROUND(CAST(st.kills AS REAL) / MAX(st.deaths, 1), 2) AS value
          FROM players p JOIN player_stats st ON st.player_id = p.id WHERE st.kills + st.deaths > 0 ORDER BY value DESC, st.kills DESC, p.id ASC LIMIT ?`,
-    fastest: `SELECT p.id, p.name, c.challenge_id, c.solve_ms AS value FROM challenge_completions c JOIN players p ON p.id = c.player_id ORDER BY c.solve_ms ASC LIMIT ?`,
+    fastest: `SELECT p.id, p.name, c.challenge_id, c.solve_ms AS value FROM challenge_completions c JOIN players p ON p.id = c.player_id WHERE c.assisted = 0 ORDER BY c.solve_ms ASC LIMIT ?`,
   };
   const boards = Object.fromEntries(Object.entries(leaderboardSql).map(([k, sql]) => [k, db.prepare(sql)]));
   const rankStmt = db.prepare(`SELECT COUNT(*) + 1 AS rank FROM (
@@ -189,14 +201,15 @@ function createRepo(db) {
       if (changed) q.addHint.run(playerId);
       return q.progress.get(playerId, challengeId);
     },
+    revealSolution: (playerId, challengeId) => q.revealSolution.run(playerId, challengeId),
     setVerified: (playerId, challengeId, code) => q.setVerified.run(code, now(), playerId, challengeId),
     recordAttempt: (playerId, challengeId, passed, passedTests, totalTests) =>
       q.insertAttempt.run(playerId, challengeId, passed ? 1 : 0, passedTests, totalTests, now()),
     attemptStats: (playerId) => q.attemptStats.get(playerId),
 
     /** Mark a challenge solved and pay for it in one transaction. Returns true if new. */
-    completeChallenge: db.transaction((playerId, challengeId, points, solveMs, code) => {
-      const info = q.insertCompletion.run(playerId, challengeId, points, solveMs, code, now());
+    completeChallenge: db.transaction((playerId, challengeId, points, solveMs, code, assisted = false) => {
+      const info = q.insertCompletion.run(playerId, challengeId, points, solveMs, code, now(), assisted ? 1 : 0);
       if (info.changes !== 1) return false;
       q.insertScore.run(playerId, 'bug', `challenge:${challengeId}`, points, now());
       return true;

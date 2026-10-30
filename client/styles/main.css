@@ -158,3 +158,18 @@ table.lb tr.me td { color: var(--yellow); }
   .bottom-stats { gap: 10px; }
   #bottom-mission { display: none; }
 }
+
+/* Easy mode */
+.easy-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--yellow); white-space: nowrap; cursor: pointer; margin-left: auto; padding-top: 4px; }
+.easy-toggle input { accent-color: #ffd23f; }
+#ch-guide { margin: 0 14px 8px; padding: 8px 10px; border: 1px solid rgba(255, 210, 63, 0.45); border-radius: 8px; background: rgba(255, 210, 63, 0.07); font-size: 13px; }
+#ch-guide .g-title { font-weight: 700; color: var(--yellow); margin-bottom: 4px; }
+#ch-guide ol { margin: 0; padding-left: 18px; }
+#ch-guide li { margin: 3px 0; cursor: pointer; }
+#ch-guide li:hover .g-line { text-decoration: underline; }
+#ch-guide .g-line { color: var(--yellow); font-weight: 700; }
+#ch-guide li.done { opacity: 0.55; }
+#ch-guide li.done .g-line { color: var(--green); }
+#ch-guide .g-foot { margin-top: 6px; color: var(--muted, #b9a8d9); font-size: 12px; }
+.bug-line { background: rgba(255, 210, 63, 0.14); }
+.bug-line-gutter { background: #ffd23f; width: 4px !important; margin-left: 3px; }

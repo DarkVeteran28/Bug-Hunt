@@ -12,6 +12,8 @@ import infiniteAmmo from './hard/infinite-ammo.js';
 import faultyCheckpoint from './hard/faulty-checkpoint.js';
 import doubleScore from './hard/double-score.js';
 import brokenFinalGate from './expert/broken-final-gate.js';
+import { GUIDES } from './guides.js';
+import { SCORING } from '../shared/config.js';
 
 export const CHALLENGE_LIST = Object.freeze([
   ghostWall, brokenCar, invisibleGate,
@@ -40,5 +42,8 @@ export function publicChallenge(c, reward) {
     starterCode: c.starterCode,
     testNames: c.tests.map((t) => (t.hidden ? 'Hidden test' : t.name)),
     reward,
+    assistedReward: Math.floor(reward * SCORING.assistedFactor),
+    // Easy mode: plain-language notes tied to the buggy lines.
+    guide: GUIDES[c.id] || [],
   };
 }

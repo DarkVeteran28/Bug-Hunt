@@ -111,6 +111,7 @@
               <div id="ch-title">Challenge</div>
               <div id="ch-meta"></div>
             </div>
+            <label class="easy-toggle" title="Highlights the buggy lines and explains them in plain words"><input type="checkbox" id="easy-mode" /> Easy mode</label>
             <button id="btn-close-challenge" class="btn btn-small" title="Leave this challenge (your draft is saved)">Exit ✕</button>
           </div>
           <details id="ch-details" open>
@@ -119,12 +120,14 @@
             <ol id="ch-repro"></ol>
             <p id="ch-consequence" class="muted"></p>
           </details>
+          <div id="ch-guide" hidden></div>
           <div id="editor-host"></div>
           <div class="challenge-actions">
             <button id="btn-run" class="btn btn-primary">Run Tests</button>
             <button id="btn-apply" class="btn btn-success" disabled title="Enabled after every test passes">Apply Fix</button>
             <button id="btn-reset" class="btn">Reset Code</button>
             <button id="btn-hint" class="btn">Hint</button>
+            <button id="btn-solution" class="btn" hidden title="Puts the working fix in the editor. You get half the points for this bug.">Show Fix</button>
             <span id="ch-status"></span>
           </div>
           <div id="ch-hints"></div>

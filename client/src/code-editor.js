@@ -24,6 +24,7 @@ export class CodeEditor {
     this.editor = null;
     this.fallback = null;
     this.changeHandlers = [];
+    this.decorations = [];
     this.ready = this.init();
   }
 
@@ -86,6 +87,35 @@ export class CodeEditor {
   setValue(v) {
     if (this.editor) this.editor.setValue(v);
     else if (this.fallback) this.fallback.value = v;
+  }
+
+  /** Highlight lines (1-based) with a hover note. Pass [] to clear. */
+  markLines(marks) {
+    if (!this.editor) return;
+    const monaco = window.monaco;
+    this.decorations = this.editor.deltaDecorations(this.decorations, marks.map((m) => ({
+      range: new monaco.Range(m.line, 1, m.line, 1),
+      options: {
+        isWholeLine: true,
+        className: 'bug-line',
+        linesDecorationsClassName: 'bug-line-gutter',
+        hoverMessage: { value: m.message },
+        overviewRuler: { color: '#ffd23f', position: monaco.editor.OverviewRulerLane.Left },
+      },
+    })));
+  }
+
+  revealLine(line) {
+    if (this.editor) {
+      this.editor.revealLineInCenter(line);
+      this.editor.setPosition({ lineNumber: line, column: 1 });
+      this.editor.focus();
+    } else if (this.fallback) {
+      const lines = this.fallback.value.split('\n');
+      const start = lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
+      this.fallback.focus();
+      this.fallback.setSelectionRange(start, start + (lines[line - 1] || '').length);
+    }
   }
 
   setReadOnly(ro) {

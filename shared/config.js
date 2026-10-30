@@ -3,6 +3,8 @@
 
 export const SCORING = Object.freeze({
   bug: { easy: 100, medium: 250, hard: 500, expert: 1000 },
+  // Share of the bug reward paid when the player revealed the solution in Easy mode.
+  assistedFactor: 0.5,
   combat: {
     elimination: 100,
     // Kills on the same victim inside this window beyond the cap earn nothing

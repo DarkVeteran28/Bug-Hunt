@@ -13,6 +13,10 @@ export function rewardFor(challenge) {
   return SCORING.bug[challenge.difficulty];
 }
 
+export function assistedReward(challenge) {
+  return Math.floor(rewardFor(challenge) * SCORING.assistedFactor);
+}
+
 export class ChallengeManager {
   constructor(db, { runner = defaultRunner, now = Date.now } = {}) {
     this.db = db;
@@ -45,8 +49,22 @@ export class ChallengeManager {
       hints: c.hints.slice(0, progress.hints_revealed),
       solved,
       verifiedCode: solved ? null : progress.verified_code || null,
+      solutionRevealed: !!progress.solution_revealed,
       solvedCode: solved ? player.progress.code[challengeId] : null,
     };
+  }
+
+  /**
+   * Easy mode: reveal the reference fix. The player still has to run the
+   * tests and apply it, and the reward for this challenge is reduced.
+   */
+  solution(player, challengeId) {
+    const c = CHALLENGES[challengeId];
+    if (!c) return { ok: false, error: 'Unknown challenge.' };
+    if (player.debugging !== challengeId) return { ok: false, error: 'Open this challenge at its station first.' };
+    if (player.progress.isSolved(challengeId)) return { ok: false, error: 'You already fixed this bug.' };
+    this.db.revealSolution(player.id, challengeId);
+    return { ok: true, code: c.solutionCode, reward: assistedReward(c) };
   }
 
   close(player) {
@@ -104,13 +122,14 @@ export class ChallengeManager {
     const progress = this.db.getProgress(player.id, challengeId);
     if (player.progress.isSolved(challengeId)) return { ok: true, alreadySolved: true, awarded: 0 };
     if (!progress || !progress.verified_code) return { ok: false, error: 'Run the tests and pass all of them before applying the fix.' };
-    const points = rewardFor(c);
+    const assisted = !!progress.solution_revealed;
+    const points = assisted ? assistedReward(c) : rewardFor(c);
     const solveMs = Math.max(0, (progress.verified_at || this.now()) - progress.first_opened_at);
-    const fresh = this.db.completeChallenge(player.id, challengeId, points, solveMs, progress.verified_code);
+    const fresh = this.db.completeChallenge(player.id, challengeId, points, solveMs, progress.verified_code, assisted);
     player.progress.solved.add(challengeId);
     player.progress.code[challengeId] = progress.verified_code;
     player.progress.recompute();
     if (fresh) player.session.bugPoints += points;
-    return { ok: true, alreadySolved: !fresh, awarded: fresh ? points : 0, solveMs, title: c.title, consequence: c.consequence };
+    return { ok: true, alreadySolved: !fresh, awarded: fresh ? points : 0, assisted, solveMs, title: c.title, consequence: c.consequence };
   }
 }

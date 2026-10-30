@@ -222,6 +222,13 @@ export function attachSocketHandlers(io, { db, rooms, challenges }) {
       reply(ack, challenges.hint(p, String(msg.id)));
     });
 
+    socket.on('challenge:solution', (msg, ack) => {
+      if (!limits.action()) return;
+      const [room, p] = current();
+      if (!room || !msg) return reply(ack, { ok: false, error: 'Join a room first.' });
+      reply(ack, challenges.solution(p, String(msg.id)));
+    });
+
     socket.on('challenge:run', async (msg, ack) => {
       if (!limits.action()) return reply(ack, { ok: false, error: 'Too many requests.' });
       const [room, p] = current();

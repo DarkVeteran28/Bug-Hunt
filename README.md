@@ -31,8 +31,8 @@ Environment variables: `PORT` (default 3000), `HOST` (default 0.0.0.0),
 ### Tests
 
 ```bash
-npm test                 # 71 unit + integration tests (node:test, real sandbox, real Socket.IO)
-npm run test:browser     # headless two-player browser run (needs Playwright, see below)
+npm test                 # 75 unit + integration tests (node:test, real sandbox, real Socket.IO)
+npm run test:browser     # headless two-player browser run + Easy mode check (needs Playwright, see below)
 ```
 
 The browser test needs Playwright, which is not a runtime dependency:
@@ -83,6 +83,23 @@ hidden tests and shows each result. **Apply Fix** only enables after every
 test passes; applying it records the verified submission, pays the reward
 once and switches the game behaviour. Drafts are saved to the server as you
 type, so dying, disconnecting or closing the editor never loses work.
+
+### Easy mode
+
+Easy mode is on by default (toggle it at the top of the challenge panel; the
+choice is remembered in the browser). It adds:
+
+- a "What's wrong" box that explains every seeded bug in plain words, with its
+  line number (click a note to jump to the line);
+- yellow highlights on the buggy lines in the editor, with the explanation on
+  hover; a note switches to "Edited" once you change that line;
+- a tip under failing tests to compare "expected" with "received";
+- a **Show Fix** button that puts the reference fix in the editor. You still
+  run the tests and apply it, but that bug then pays half its reward
+  (`SCORING.assistedFactor`) and does not count for the fastest-fix
+  leaderboard. The server remembers that the fix was shown.
+
+The explanations live in `challenges/guides.js`.
 
 ### Where fixed code runs
 
