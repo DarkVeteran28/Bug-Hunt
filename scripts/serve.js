@@ -12,11 +12,11 @@ import { ROOT, TYPES, resolveSource } from './layout.js';
 const useDist = process.argv.includes('--dist');
 const DIST = path.join(ROOT, 'dist');
 const PORT = Number(process.env.PORT || 3000);
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
 
 if (useDist && !fs.existsSync(path.join(DIST, 'index.html'))) {
-  console.error('dist/ is missing. Run "npm run build" first.');
-  process.exit(1);
+  console.log('dist/ is missing. Building now...');
+  await import('./build.js');
 }
 
 function fileFor(urlPath) {
